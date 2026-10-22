@@ -16,7 +16,7 @@
 
 - **Part I — Master System Blueprint:** [1 Purpose](#1-blueprint-purpose-authority-and-boundary) · [2 Definition](#2-executive-system-definition) · [3 Scope](#3-scope-boundaries-and-exclusions) · [4 Actors](#4-stakeholders-actors-and-access-model) · [5 Principles](#5-product-principles-and-constraints) · [6 Capabilities](#6-capability-and-feature-catalog) · [7 Quality](#7-requirements-and-quality-summary) · [8 Domain](#8-domain-model-and-business-rule-summary) · [9 Workflows](#9-end-to-end-system-workflows) · [10 Architecture](#10-architecture-and-technology-map) · [11 Data & integrations](#11-data-and-integration-inventory) · [12 Posture](#12-ux-security-and-operational-posture) · [13 Environments](#13-environments-delivery-and-release-model) · [14 Testing](#14-test-strategy-and-system-acceptance) · [15 Roadmap](#15-delivery-roadmap-and-vertical-slice-plan) · [16 RAID](#16-risk-assumption-dependency-and-open-question-register) · [17 Documents](#17-canonical-document-register-and-cross-links) · [18 Decisions](#18-top-level-decisions-and-change-protocol) · [19 Approval](#19-system-level-completion-and-approval) · [20 Glossary](#20-glossary)
 - **Part II — Integration plan:** [21 Data architecture](#21-data-architecture) · [22 Database](#22-database-design-and-migrations) · [23 API calling](#23-api-design-and-calling-pattern) · [24 Validation](#24-validation-pipeline) · [25 Backend structure](#25-backend-and-repository-structure) · [26 Single shop vs franchise](#26-single-shop-vs-franchise-behaviour) · [27 Security integration](#27-security-integration) · [28 Workflow sequences](#28-workflow-sequences) · [29 Errors and observability](#29-error-handling-and-observability) · [30 Damaged goods & credit notes](#30-damaged-goods-and-customer-credit-notes)
-- **Part III — Team delivery plan:** [31 Team](#31-team-structure-and-ownership) · [32 GitHub](#32-github-collaboration-setup) · [33 Phases and milestones](#33-phases-milestones-and-parallel-work) · [34 Cadence](#34-sprint-cadence-and-communication) · [35 Requirements](#35-requirement-management) · [36 Bugs](#36-bug-and-error-management) · [37 Ready and Done](#37-definition-of-ready-and-definition-of-done) · [Appendices](#appendix-a--github-templates)
+- **Part III — Team delivery plan:** [31 Team](#31-team-structure-and-ownership) · [32 GitHub](#32-github-collaboration-setup) · [33 Phases and milestones](#33-phases-milestones-and-parallel-work) · [34 Cadence](#34-sprint-cadence-and-communication) · [35 Requirements](#35-requirement-management) · [36 Bugs](#36-bug-and-error-management) · [37 Ready and Done](#37-definition-of-ready-and-definition-of-done) · [Appendices](#appendix-a--github-templates) · [E UI design map](#appendix-e--ui-design-map-figma)
 
 ---
 
@@ -260,7 +260,7 @@ flowchart TB
 
 | Concern | System-level commitment | Canonical source | Verification / evidence | Exception owner |
 | --- | --- | --- | --- | --- |
-| UX / accessibility | Lane: scan-first, keyboard-only capable, large touch targets, Sinhala/Tamil/English labels. Back office: WCAG 2.2 AA | `docs/10-ui.md` | axe CI, pilot cashier test | P3 / P4 |
+| UX / accessibility | Lane: scan-first, keyboard-only capable, large touch targets, Sinhala/Tamil/English labels. Back office: WCAG 2.2 AA | `docs/10-ui.md`; screen map and tokens in Appendix E | axe CI, pilot cashier test | P3 / P4 |
 | Identity and authorization | Supabase Auth; JWT claims; forced RLS; bitmask permissions; manager PIN override; least privilege; host-only secure cookies; automatic and manual access reset at every scope (§27.5) | `docs/11-security.md` | pgTAP isolation suite, review | P1 |
 | Privacy / retention | Minimum data, consent for marketing SMS, deletion on request, retention table §11 | security + data docs | Delete test, quarterly review | P1 |
 | Observability / support | Structured logs with request ID, Sentry, uptime checks, business alerts (voids, refunds, drift) | `docs/15-errors-observability.md` | Alert drill each release | P4 |
@@ -2409,12 +2409,200 @@ Accepted / rejected by PO on <date> · Notes
 - Sri Lanka Personal Data Protection Act No. 9 of 2022 — Data Protection Authority, <https://www.dpa.gov.lk>
 - PayHere Recurring API — <https://support.payhere.lk/api-&-mobile-sdk/recurring-api>
 
+# Appendix E — UI design map (Figma)
+
+All screens are designed in the Figma file **[Lane OS POS System](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System)**. This appendix maps every frame to its route so whoever builds a screen opens the right frame. It is the canonical screen index until `docs/10-ui.md` (DOC-10) is written. Route paths are relative to `apps/web/app/`. Frame IDs are Figma node IDs; each one links straight to the frame.
+
+**Rules for building screens**
+
+- Build from the Figma frame using the tokens and sizes in E.6. Use token names in code, never raw hex values.
+- Buttons (4 styles), the stat card and the product card come from the UI kit frame [1-4](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-4). Figma has **no input or table components**, so build them once in `packages/ui` from the screens and reuse them everywhere.
+- Checkout dialogs (payment, hold and recall, price check, loyalty and credit note) are components inside `(lane)/lane/[laneId]`, not separate routes.
+- Where a row says "no frame yet", build from the frame named in the notes and raise a design request for the missing frame.
+
+## E.1 Screens for routes that already exist in the scaffold
+
+### E.1.1 Auth
+
+| Screen | Figma frame | Route (`apps/web/app/…`) | Notes |
+| --- | --- | --- | --- |
+| Login | [1-34](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-34) | `(auth)/login` |  |
+
+### E.1.2 Lane (checkout PWA)
+
+| Screen | Figma frame | Route (`apps/web/app/…`) | Notes |
+| --- | --- | --- | --- |
+| Register device | [11-4125](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-4125) | `(lane)/lane/register` | No dedicated frame yet; use the "Register device" flow from Devices & lanes |
+| PIN login | [1-198](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-198) | `(lane)/lane/[laneId]/pin` |  |
+| Checkout (pinned items) | [1-533](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-533) | `(lane)/lane/[laneId]` |  |
+| Checkout (search + scan) | [1-841](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-841) | `(lane)/lane/[laneId]` |  |
+| Payment dialog | [1-1159](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-1159) | `(lane)/lane/[laneId]` | Dialog on the checkout screen |
+| Hold & recall dialog | [11-2931](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-2931) | `(lane)/lane/[laneId]` | Dialog |
+| Price check dialog | [11-2965](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-2965) | `(lane)/lane/[laneId]` | Dialog |
+| Loyalty / credit note | [11-4756](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-4756) | `(lane)/lane/[laneId]` | Dialog |
+| Offline mode | [11-3260](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-3260) | `(lane)/lane/[laneId]` | Offline banner and queue state |
+| Customer display | [11-2973](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-2973) | `(lane)/lane/[laneId]/display` |  |
+| Return | [1-2580](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-2580) | `(lane)/lane/[laneId]/return` |  |
+| Shift open | [11-2885](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-2885) | `(lane)/lane/[laneId]/shift` |  |
+| Shift close / Z-report | [1-4331](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-4331) | `(lane)/lane/[laneId]/shift` |  |
+| Lane locked | [1-198](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-198) | `(lane)/lane/locked` | No frame yet; reuse PIN login |
+
+### E.1.3 Back office (tenant)
+
+| Screen | Figma frame | Route (`apps/web/app/…`) | Notes |
+| --- | --- | --- | --- |
+| Dashboard | [1-256](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-256) | `(tenant)/backoffice` |  |
+| Items list | [1-1429](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-1429) | `(tenant)/backoffice/items` |  |
+| Item new / edit | [1-1846](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-1846) | `(tenant)/backoffice/items/new`, `…/items/[id]` | One form for both |
+| Items import | [11-4551](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-4551) | `(tenant)/backoffice/items/import` |  |
+| Promotions | [1-4807](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-4807) | `(tenant)/backoffice/promotions` |  |
+| Labels | [11-3929](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-3929) | `(tenant)/backoffice/labels` |  |
+| Damaged goods | [1-1849](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-1849) | `(tenant)/backoffice/stock/damage` |  |
+| Stock counts | [11-3268](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-3268) | `(tenant)/backoffice/stock/counts` |  |
+| Expiry | [11-3474](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-3474) | `(tenant)/backoffice/stock/expiry` |  |
+| Suppliers | [1-2121](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-2121) | `(tenant)/backoffice/suppliers` |  |
+| Purchase orders | [11-3669](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-3669) | `(tenant)/backoffice/purchasing/orders` |  |
+| New GRN | [1-2351](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-2351) | `(tenant)/backoffice/purchasing/grn/new` |  |
+| Supplier payments | [11-3921](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-3921) | `(tenant)/backoffice/purchasing/payments` |  |
+| Customers | [1-3034](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-3034) | `(tenant)/backoffice/customers` |  |
+| Credit notes | [1-2808](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-2808) | `(tenant)/backoffice/credit-notes` | Same frame as Refunds |
+| Staff | [1-3237](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-3237) | `(tenant)/backoffice/staff` |  |
+| Devices & lanes | [11-4125](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-4125) | `(tenant)/backoffice/lanes` |  |
+| Reports | [1-4536](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-4536) | `(tenant)/backoffice/reports/[report]` |  |
+| Sync issues | [11-3260](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-3260) | `(tenant)/backoffice/sync-issues` | No back-office frame yet; based on the lane offline queue |
+| Billing | [11-4771](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-4771) | `(tenant)/backoffice/billing` |  |
+| Settings → Branding | [1-3701](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-3701) | `(tenant)/backoffice/settings/branding` |  |
+| Settings → Security | [11-4365](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-4365) | `(tenant)/backoffice/settings/security` |  |
+| Profile → Security | [1-3518](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-3518) | `(tenant)/backoffice/profile/security` |  |
+| Staff active sessions | [1-3518](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-3518) | `(tenant)/backoffice/staff/[id]/sessions` | Use the "Active sessions" card |
+
+### E.1.4 Chain / head office (chain tenants)
+
+| Screen | Figma frame | Route (`apps/web/app/…`) | Notes |
+| --- | --- | --- | --- |
+| Head office | [3-261](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=3-261) | `(tenant)/backoffice/head-office` |  |
+| Central pricing | [3-1491](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=3-1491) | `(tenant)/backoffice/pricing` |  |
+| Transfers | [3-1283](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=3-1283) | `(tenant)/backoffice/transfers` |  |
+
+### E.1.5 Platform admin
+
+| Screen | Figma frame | Route (`apps/web/app/…`) | Notes |
+| --- | --- | --- | --- |
+| Overview | [3-2775](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=3-2775) | `(platform)/admin` |  |
+| Tenants | [3-3026](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=3-3026) | `(platform)/admin/tenants` |  |
+| Tenant detail | [3-3320](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=3-3320) | `(platform)/admin/tenants/[id]` |  |
+| Billing | [3-3802](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=3-3802) | `(platform)/admin/billing` |  |
+| Security | [3-4959](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=3-4959) | `(platform)/admin/security` |  |
+
+### E.1.6 Public
+
+| Screen | Figma frame | Route (`apps/web/app/…`) | Notes |
+| --- | --- | --- | --- |
+| Digital receipt | [11-285](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-285) | `r/[id]` | Same layout as the 80 mm receipt (logo left) |
+
+## E.2 Designed screens that need a new route folder
+
+Create each folder (with a placeholder `page.tsx`) in the task that builds the screen, and add the route to the permission map in the same PR.
+
+| Screen | Figma frame | Route (`apps/web/app/…`) | Notes |
+| --- | --- | --- | --- |
+| Owner sign-up | [1-90](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-90) | `(auth)/register` |  |
+| Wholesale | [1-1162](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-1162) | `(tenant)/backoffice/wholesale` |  |
+| Refunds | [1-2808](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-2808) | `(tenant)/backoffice/refunds` | Same frame as Credit notes |
+| Settings → Tax | [1-3902](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-3902) | `(tenant)/backoffice/settings/tax` |  |
+| Settings → Receipt | [1-4145](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-4145) | `(tenant)/backoffice/settings/receipt` |  |
+| Shops (chain) | [3-507](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=3-507) | `(tenant)/backoffice/shops` |  |
+| Shop detail (chain) | [3-792](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=3-792) | `(tenant)/backoffice/shops/[id]` |  |
+| Stock across shops | [3-1035](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=3-1035) | `(tenant)/backoffice/stock-across-shops` |  |
+| Revenue (chain reports) | [3-1676](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=3-1676) | `(tenant)/backoffice/revenue` |  |
+| Damage across shops | [3-1921](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=3-1921) | `(tenant)/backoffice/damage-across-shops` |  |
+| Activity logs | [3-2111](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=3-2111) | `(tenant)/backoffice/activity-logs` |  |
+| Chain users and access | [3-2328](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=3-2328) | `(tenant)/backoffice/access` |  |
+| Plan (chain billing) | [3-2556](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=3-2556) | `(tenant)/backoffice/plan` |  |
+| Admin login | [3-2736](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=3-2736) | `(platform)/admin/login` |  |
+| Plans | [3-3565](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=3-3565) | `(platform)/admin/plans` |  |
+| Overdue accounts | [3-4028](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=3-4028) | `(platform)/admin/overdue` |  |
+| Support tickets | [3-4234](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=3-4234) | `(platform)/admin/tickets` |  |
+| Live activity | [3-4387](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=3-4387) | `(platform)/admin/live-activity` |  |
+| Impersonation (support view) | [3-4617](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=3-4617) | `(platform)/admin/impersonation` |  |
+| Audit | [3-4771](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=3-4771) | `(platform)/admin/audit` |  |
+
+## E.3 Print templates (`packages/devices`)
+
+Receipts and slips use Roboto Mono and print through QZ Tray.
+
+| Template | Figma frame |
+| --- | --- |
+| Receipt 80 mm, logo left | [11-285](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-285) |
+| Receipt 80 mm, logo top | [11-608](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-608) |
+| Receipt 80 mm, no logo | [11-930](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-930) |
+| Receipt 58 mm | [11-1250](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-1250) |
+| Credit note slip | [11-1635](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-1635) |
+| Return receipt | [11-1680](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-1680) |
+| Z-report | [11-1759](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-1759) |
+| A4 tax invoice, logo left | [11-1761](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-1761) |
+| A4 quotation, no logo | [11-2093](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-2093) |
+| Labels (shelf, reduced, scale) | [11-2830](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-2830) |
+
+## E.4 Shared states
+
+Empty and error states for every list and screen: [11-4920](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-4920). Pair them with the error envelope in §29.1.
+
+## E.5 Gaps in the design file
+
+| Gap | Interim decision |
+| --- | --- |
+| Lane register has no dedicated frame | Use the "Register device" flow from Devices & lanes ([11-4125](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-4125)) |
+| Lane locked has no frame | Reuse PIN login ([1-198](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-198)) |
+| Back-office sync issues has no frame | Base it on the lane offline queue ([11-3260](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=11-3260)) |
+| Credit notes and Refunds share one frame | Both routes use [1-2808](https://www.figma.com/design/TchUnJAKdMTE5RnusARL4l/Lane-OS-POS-System?node-id=1-2808); split the frame if the screens diverge |
+| No design tokens, Figma variables or styles; colours are typed into each screen | The tokens in E.6 are the source of truth in code (theme in `packages/ui`) |
+| No input or table components | Build them in `packages/ui` from the screens |
+
+## E.6 Design tokens
+
+**Colours**
+
+| Token | Value |
+| --- | --- |
+| `brand-primary` | `#0E7C66` |
+| `brand-dark` | `#095C4C` |
+| `brand-light` | `#E6F4F0` |
+| `text` | `#0F172A` |
+| `text-muted` | `#64748B` |
+| `border` | `#E2E8F0` |
+| `background` | `#F4F6F8` |
+| `surface` | `#FFFFFF` |
+| `sidebar` | `#0B1F1A` |
+| `danger` | `#DC2626` |
+| `warning` | `#B45309` |
+| `info` | `#1D4ED8` |
+| `success` | `#15803D` |
+| `platform-accent` | `#4338CA` |
+
+`platform-accent` is used only in the platform admin area.
+
+**Type and shape**
+
+| Property | Value |
+| --- | --- |
+| UI font | Inter: Regular, Medium, Semi Bold, Bold |
+| Receipt font | Roboto Mono |
+| Page title | 24 px |
+| Card title | 15 px |
+| Body | 13 px |
+| Labels | 11–12 px |
+| Radius: inputs and buttons | 8 px |
+| Radius: cards | 12 px |
+| Radius: dialogs | 16 px |
+
 # Document governance
 
 | Version | Date | Author / Role | Change summary | Reviewer / approver |
 | --- | --- | --- | --- | --- |
 | 0.1 | 2026-10-15 | Tech Lead (P1) | Initial blueprint and integration plan from the template | PO / TBD |
 | 0.2 | 2026-10-15 | Tech Lead (P1) | Added damaged goods (§30.1), credit notes (§30.2), session/cookie security and access reset (§27.5), tenant security options (§27.6), new threats, errors, tests and sprint tasks; Part III renumbered to 31–37 | PO / TBD |
+| 0.3 | 2026-10-22 | Tech Lead (P1) | Added Appendix E: Figma screen-to-route map, print templates, design gaps and design tokens | PO / TBD |
 | [x.y] | [DATE] | [ROLE] | [WHAT CHANGED AND WHY] | [ROLE] |
 
 ## Review and approval

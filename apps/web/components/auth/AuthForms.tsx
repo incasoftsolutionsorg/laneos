@@ -1,0 +1,124 @@
+'use client';
+
+import Link from 'next/link';
+import { useActionState, useState } from 'react';
+import { Alert, Button, Field, Input, buttonClass } from '@laneos/ui';
+import { register, requestReset, signIn, updatePassword, type FormState } from '@/app/(auth)/actions';
+
+const initial: FormState = {};
+
+function PasswordInput({ autoComplete }: { autoComplete: string }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <Input name="password" type={show ? 'text' : 'password'} autoComplete={autoComplete} required className="pr-16" />
+      <button
+        type="button"
+        onClick={() => setShow((s) => !s)}
+        className="absolute inset-y-0 right-3 text-xs font-semibold text-brand-primary"
+      >
+        {show ? 'Hide' : 'Show'}
+      </button>
+    </div>
+  );
+}
+
+function Heading({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <div>
+      <h1 className="text-[30px] font-bold text-text">{title}</h1>
+      <p className="mt-1 text-sm text-text-muted">{subtitle}</p>
+    </div>
+  );
+}
+
+export function LoginForm({ next, reason }: { next?: string; reason?: string }) {
+  const [state, action, pending] = useActionState(signIn, initial);
+  return (
+    <form action={action} className="flex flex-col gap-4">
+      <Heading title="Welcome back" subtitle="Sign in to your shop back office." />
+      {reason === 'reset' ? <Alert tone="warning">Your access was reset. Sign in again.</Alert> : null}
+      {reason === 'link' ? <Alert tone="warning">That link has expired. Request a new one.</Alert> : null}
+      {state.error ? <Alert>{state.error}</Alert> : null}
+      <input type="hidden" name="next" value={next ?? ''} />
+      <Field label="Email">
+        <Input name="email" type="email" autoComplete="email" required placeholder="owner@yourshop.lk" />
+      </Field>
+      <Field label="Password">
+        <PasswordInput autoComplete="current-password" />
+      </Field>
+      <div className="flex justify-end">
+        <Link href="/forgot-password" className="text-[13px] font-semibold text-brand-primary">Forgot password?</Link>
+      </div>
+      <Button type="submit" disabled={pending} className="w-full">{pending ? 'Signing in…' : 'Sign in'}</Button>
+      <div className="flex items-center gap-2.5">
+        <span className="h-px flex-1 bg-border" />
+        <span className="text-xs text-text-muted">or</span>
+        <span className="h-px flex-1 bg-border" />
+      </div>
+      <Link href="/lane" className={buttonClass('secondary', 'w-full')}>Cashier PIN login</Link>
+      <p className="flex gap-1.5 text-[13px]">
+        <span className="text-text-muted">New shop?</span>
+        <Link href="/register" className="font-semibold text-brand-primary">Create an account</Link>
+      </p>
+    </form>
+  );
+}
+
+export function RegisterForm() {
+  const [state, action, pending] = useActionState(register, initial);
+  if (state.message) {
+    return (
+      <div className="flex flex-col gap-4">
+        <Heading title="Check your email" subtitle="One more step." />
+        <Alert tone="success">{state.message}</Alert>
+        <Link href="/login" className="text-[13px] font-semibold text-brand-primary">Back to sign in</Link>
+      </div>
+    );
+  }
+  return (
+    <form action={action} className="flex flex-col gap-4">
+      <Heading title="Create your shop" subtitle="Start on the single-shop plan. You can add lanes and shops later." />
+      {state.error ? <Alert>{state.error}</Alert> : null}
+      <Field label="Your name"><Input name="ownerName" required autoComplete="name" /></Field>
+      <Field label="Email"><Input name="email" type="email" required autoComplete="email" /></Field>
+      <Field label="Password" hint="At least 10 characters"><PasswordInput autoComplete="new-password" /></Field>
+      <Field label="Business name"><Input name="businessName" required placeholder="ABC Supermarket" /></Field>
+      <div className="grid grid-cols-[1fr_120px] gap-3">
+        <Field label="First shop"><Input name="shopName" required placeholder="Kandy" /></Field>
+        <Field label="Shop code"><Input name="shopCode" required placeholder="KDY1" maxLength={8} className="uppercase" /></Field>
+      </div>
+      <Button type="submit" disabled={pending} className="w-full">{pending ? 'Creating…' : 'Create account'}</Button>
+      <p className="flex gap-1.5 text-[13px]">
+        <span className="text-text-muted">Already have an account?</span>
+        <Link href="/login" className="font-semibold text-brand-primary">Sign in</Link>
+      </p>
+    </form>
+  );
+}
+
+export function ForgotPasswordForm() {
+  const [state, action, pending] = useActionState(requestReset, initial);
+  return (
+    <form action={action} className="flex flex-col gap-4">
+      <Heading title="Reset your password" subtitle="We will email you a link to choose a new password." />
+      {state.error ? <Alert>{state.error}</Alert> : null}
+      {state.message ? <Alert tone="success">{state.message}</Alert> : null}
+      <Field label="Email"><Input name="email" type="email" required autoComplete="email" /></Field>
+      <Button type="submit" disabled={pending} className="w-full">{pending ? 'Sending…' : 'Send reset link'}</Button>
+      <Link href="/login" className="text-[13px] font-semibold text-brand-primary">Back to sign in</Link>
+    </form>
+  );
+}
+
+export function ResetPasswordForm() {
+  const [state, action, pending] = useActionState(updatePassword, initial);
+  return (
+    <form action={action} className="flex flex-col gap-4">
+      <Heading title="Choose a new password" subtitle="Your other devices will be signed out." />
+      {state.error ? <Alert>{state.error}</Alert> : null}
+      <Field label="New password" hint="At least 10 characters"><PasswordInput autoComplete="new-password" /></Field>
+      <Button type="submit" disabled={pending} className="w-full">{pending ? 'Saving…' : 'Save password'}</Button>
+    </form>
+  );
+}
