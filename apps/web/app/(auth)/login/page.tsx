@@ -1,9 +1,14 @@
-import type { Metadata } from 'next';
-import { LoginForm } from '@/components/auth/AuthForms';
+import type { Metadata } from 'next'
+import { LoginForm } from '@/components/auth/AuthForms'
+import { safeNext } from '@/lib/security/safe-next'
 
-export const metadata: Metadata = { title: 'Sign in' };
+export const metadata: Metadata = { title: 'Sign in' }
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string; reason?: string }> }) {
-  const { next, reason } = await searchParams;
-  return <LoginForm next={next} reason={reason} />;
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string; reason?: string }>
+}) {
+  const { next, reason } = await searchParams
+  return <LoginForm next={safeNext(next)} reason={reason} />
 }

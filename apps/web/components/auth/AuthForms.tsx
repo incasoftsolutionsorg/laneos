@@ -7,14 +7,25 @@ import { register, requestReset, signIn, updatePassword, type FormState } from '
 
 const initial: FormState = {};
 
-function PasswordInput({ autoComplete }: { autoComplete: string }) {
+// Client-side attributes are UX only. The server actions must enforce the same rules.
+function PasswordInput({ autoComplete, minLength }: { autoComplete: string; minLength?: number }) {
   const [show, setShow] = useState(false);
   return (
     <div className="relative">
-      <Input name="password" type={show ? 'text' : 'password'} autoComplete={autoComplete} required className="pr-16" />
+      <Input
+        name="password"
+        type={show ? 'text' : 'password'}
+        autoComplete={autoComplete}
+        minLength={minLength}
+        maxLength={72} // bcrypt limit used by Supabase Auth
+        required
+        className="pr-16"
+      />
       <button
         type="button"
         onClick={() => setShow((s) => !s)}
+        aria-label={show ? 'Hide password' : 'Show password'}
+        aria-pressed={show}
         className="absolute inset-y-0 right-3 text-xs font-semibold text-brand-primary"
       >
         {show ? 'Hide' : 'Show'}
@@ -37,12 +48,14 @@ export function LoginForm({ next, reason }: { next?: string; reason?: string }) 
   return (
     <form action={action} className="flex flex-col gap-4">
       <Heading title="Welcome back" subtitle="Sign in to your shop back office." />
+      {/* Only fixed messages are rendered; unknown reasons show nothing */}
       {reason === 'reset' ? <Alert tone="warning">Your access was reset. Sign in again.</Alert> : null}
       {reason === 'link' ? <Alert tone="warning">That link has expired. Request a new one.</Alert> : null}
       {state.error ? <Alert>{state.error}</Alert> : null}
+      {/* Can be edited by the user: the signIn action must run safeNext() on it again */}
       <input type="hidden" name="next" value={next ?? ''} />
       <Field label="Email">
-        <Input name="email" type="email" autoComplete="email" required placeholder="owner@yourshop.lk" />
+        <Input name="email" type="email" autoComplete="email" required maxLength={254} placeholder="owner@yourshop.lk" />
       </Field>
       <Field label="Password">
         <PasswordInput autoComplete="current-password" />
@@ -80,13 +93,35 @@ export function RegisterForm() {
     <form action={action} className="flex flex-col gap-4">
       <Heading title="Create your shop" subtitle="Start on the single-shop plan. You can add lanes and shops later." />
       {state.error ? <Alert>{state.error}</Alert> : null}
-      <Field label="Your name"><Input name="ownerName" required autoComplete="name" /></Field>
-      <Field label="Email"><Input name="email" type="email" required autoComplete="email" /></Field>
-      <Field label="Password" hint="At least 10 characters"><PasswordInput autoComplete="new-password" /></Field>
-      <Field label="Business name"><Input name="businessName" required placeholder="ABC Supermarket" /></Field>
+      <Field label="Your name">
+        <Input name="ownerName" required maxLength={100} autoComplete="name" />
+      </Field>
+      <Field label="Email">
+        <Input name="email" type="email" required maxLength={254} autoComplete="email" />
+      </Field>
+      <Field label="Password" hint="At least 10 characters">
+        <PasswordInput autoComplete="new-password" minLength={10} />
+      </Field>
+      <Field label="Business name">
+        <Input name="businessName" required maxLength={120} placeholder="ABC Supermarket" />
+      </Field>
       <div className="grid grid-cols-[1fr_120px] gap-3">
-        <Field label="First shop"><Input name="shopName" required placeholder="Kandy" /></Field>
-        <Field label="Shop code"><Input name="shopCode" required placeholder="KDY1" maxLength={8} className="uppercase" /></Field>
+        <Field label="First shop">
+          <Input name="shopName" required maxLength={80} placeholder="Kandy" />
+        </Field>
+        <Field label="Shop code">
+          <Input
+            name="shopCode"
+            required
+            minLength={2}
+            maxLength={8}
+            pattern="[A-Za-z0-9]{2,8}"
+            title="2 to 8 letters or digits"
+            autoCapitalize="characters"
+            placeholder="KDY1"
+            className="uppercase"
+          />
+        </Field>
       </div>
       <Button type="submit" disabled={pending} className="w-full">{pending ? 'Creating…' : 'Create account'}</Button>
       <p className="flex gap-1.5 text-[13px]">
@@ -104,7 +139,9 @@ export function ForgotPasswordForm() {
       <Heading title="Reset your password" subtitle="We will email you a link to choose a new password." />
       {state.error ? <Alert>{state.error}</Alert> : null}
       {state.message ? <Alert tone="success">{state.message}</Alert> : null}
-      <Field label="Email"><Input name="email" type="email" required autoComplete="email" /></Field>
+      <Field label="Email">
+        <Input name="email" type="email" required maxLength={254} autoComplete="email" />
+      </Field>
       <Button type="submit" disabled={pending} className="w-full">{pending ? 'Sending…' : 'Send reset link'}</Button>
       <Link href="/login" className="text-[13px] font-semibold text-brand-primary">Back to sign in</Link>
     </form>
@@ -117,7 +154,9 @@ export function ResetPasswordForm() {
     <form action={action} className="flex flex-col gap-4">
       <Heading title="Choose a new password" subtitle="Your other devices will be signed out." />
       {state.error ? <Alert>{state.error}</Alert> : null}
-      <Field label="New password" hint="At least 10 characters"><PasswordInput autoComplete="new-password" /></Field>
+      <Field label="New password" hint="At least 10 characters">
+        <PasswordInput autoComplete="new-password" minLength={10} />
+      </Field>
       <Button type="submit" disabled={pending} className="w-full">{pending ? 'Saving…' : 'Save password'}</Button>
     </form>
   );
