@@ -1,0 +1,39 @@
+/* LaneOS design tokens (blueprint Appendix E.6). Use the token names in classes, never raw hex:
+   bg-brand-primary, text-text-muted, border-border, … */
+@theme {
+  --color-brand-primary: #0e7c66;
+  --color-brand-dark: #095c4c;
+  --color-brand-light: #e6f4f0;
+  --color-brand-soft: #cfede5;
+  --color-text: #0f172a;
+  --color-text-muted: #64748b;
+  --color-text-placeholder: #94a3b8;
+  --color-border: #e2e8f0;
+  --color-border-strong: #cbd5e1;
+  --color-background: #f4f6f8;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f8fafc;
+  --color-surface-sunken: #eef2f6;
+  --color-sidebar: #0b1f1a;
+  --color-sidebar-raised: #14302a;
+  --color-sidebar-text: #d3dfdb;
+  --color-sidebar-muted: #a7bdb6;
+  --color-danger: #dc2626;
+  --color-danger-soft: #fee2e2;
+  --color-warning: #b45309;
+  --color-warning-soft: #fef3c7;
+  --color-info: #1d4ed8;
+  --color-info-soft: #dbeafe;
+  --color-success: #15803d;
+  --color-success-soft: #dcfce7;
+  --color-platform-accent: #4338ca;
+  --color-lankaqr: #7c3aed;
+  --color-chart-bar: #9dd3c6;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-roboto-mono), ui-monospace, monospace;
+
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --radius-dialog: 16px;
+}

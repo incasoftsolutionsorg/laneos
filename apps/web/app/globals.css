@@ -1,0 +1,13 @@
+@import "tailwindcss";
+@import "@laneos/ui/theme.css";
+@source "../../../packages/ui/src";
+
+html {
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}

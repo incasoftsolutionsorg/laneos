@@ -1,0 +1,28 @@
+{
+  "name": "laneos",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @laneos/web dev",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:db": "vitest run --config vitest.db.config.mts",
+    "test:smoke": "node --env-file=apps/web/.env.local scripts/smoke.mjs",
+    "db:push": "supabase db push --linked",
+    "db:types": "node scripts/gen-db-types.mjs",
+    "db:seed": "node --env-file=apps/web/.env.local scripts/seed-demo.mjs"
+  },
+  "devDependencies": {
+    "@laneos/pricing": "workspace:^",
+    "@supabase/supabase-js": "2.118.0",
+    "supabase": "2.121.0",
+    "turbo": "2.11.10",
+    "typescript": "5.9.3",
+    "vitest": "5.0.5"
+  }
+}

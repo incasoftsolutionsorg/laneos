@@ -86,7 +86,6 @@ dirs=(
   "apps/web/app/api/lane/shifts/[id]/z-report"
   "apps/web/app/api/import/items"
   "apps/web/app/api/qz/sign"
-  "apps/web/app/manifest.webmanifest"
 
   # ---------- App code ----------
   "apps/web/components/auth"
