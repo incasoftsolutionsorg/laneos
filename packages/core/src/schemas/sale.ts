@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { cents, uuid } from './common';
 
-export const PAYMENT_METHODS = ['cash', 'card', 'lankaqr', 'credit_note'] as const;
+export const PAYMENT_METHODS = ['cash', 'card', 'lankaqr', 'credit_note', 'account'] as const;
 
 export const SaleLineInput = z
   .object({
@@ -29,6 +29,8 @@ export const CreateSale = z
     lines: z.array(SaleLineInput).min(1).max(300),
     payments: z.array(PaymentInput).min(1).max(6),
     expectedTotalCents: cents,
+    /** A number from the shift's reserved range (lets an offline lane print the final number). */
+    invoiceNo: z.string().regex(/^[A-Z0-9]{2,8}-L\d{1,2}-\d{6}$/).optional(),
   })
   .strict();
 

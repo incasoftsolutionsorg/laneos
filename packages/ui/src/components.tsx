@@ -149,6 +149,18 @@ export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectE
   return <select className={cn(inputClass, 'appearance-auto', className)} {...props} />;
 }
 
+/** On/off switch (Figma toggles). Controlled: pass `on` and `onChange`. */
+export function Switch({ on, onChange, label, disabled }: { on: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
+  return (
+    <button
+      type="button" role="switch" aria-checked={on} aria-label={label} disabled={disabled} onClick={() => onChange(!on)}
+      className={cn('relative h-6 w-11 shrink-0 rounded-full transition disabled:opacity-50', on ? 'bg-brand-primary' : 'bg-border-strong')}
+    >
+      <span className={cn('absolute top-0.5 size-5 rounded-full bg-white shadow-sm transition-[left]', on ? 'left-[22px]' : 'left-0.5')} />
+    </button>
+  );
+}
+
 export function Alert({ tone = 'danger', children }: { tone?: Tone; children: ReactNode }) {
   return <div role="alert" className={cn('rounded-control px-3 py-2.5 text-[13px]', toneClasses[tone])}>{children}</div>;
 }
@@ -194,8 +206,10 @@ export function Logo({ size = 34, inverted = false }: { size?: number; inverted?
   );
 }
 
+/** Two-letter badge text: first letters of the first two words that start with a letter or digit
+ *  ("Bananas (Ambul) per kg" → "BP", not "B("). */
 export function initials(name: string) {
-  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('');
+  return name.split(/\s+/).filter((w) => /^[\p{L}\p{N}]/u.test(w)).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('');
 }
 
 export function Avatar({ name, size = 30 }: { name: string; size?: number }) {
@@ -234,4 +248,27 @@ export function ProductCard({
       </span>
     </button>
   );
+}
+
+// States (Figma 11-4920) -------------------------------------------------------------------------
+
+/** Empty or error panel: icon, title, one line of help and the next action. */
+export function EmptyState({
+  icon, title, children, action, tone = 'neutral',
+}: { icon?: ReactNode; title: string; children?: ReactNode; action?: ReactNode; tone?: 'neutral' | 'danger' }) {
+  return (
+    <div className="mx-auto flex max-w-md flex-col items-center gap-3 px-6 py-12 text-center">
+      {icon ? (
+        <span className={cn('flex size-14 items-center justify-center rounded-full', tone === 'danger' ? 'bg-danger-soft text-danger' : 'bg-brand-light text-brand-primary')}>{icon}</span>
+      ) : null}
+      <p className="text-[17px] font-semibold text-text">{title}</p>
+      {children ? <div className="text-[13px] text-text-muted">{children}</div> : null}
+      {action ? <div className="mt-1 flex flex-wrap justify-center gap-2">{action}</div> : null}
+    </div>
+  );
+}
+
+/** Grey placeholder block while a page loads. */
+export function Skeleton({ className }: { className?: string }) {
+  return <div className={cn('animate-pulse rounded-card bg-surface-sunken', className)} aria-hidden />;
 }

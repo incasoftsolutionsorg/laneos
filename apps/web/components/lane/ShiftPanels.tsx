@@ -1,64 +1,58 @@
 'use client';
 
-import { useActionState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { formatRs } from '@laneos/core';
-import { Alert, Button, Card, Field, Input } from '@laneos/ui';
-import { closeShift, openShift, type ShiftState } from '@/app/(lane)/lane/actions';
-import { Dialog } from './Dialog';
+import { Alert, Button, Switch, buttonClass } from '@laneos/ui';
+import { openShift } from '@/app/(lane)/lane/actions';
+import { DenominationTable, denomsTotal, type Denoms } from './Denominations';
 
-const initial: ShiftState = {};
+const when = (d: Date) =>
+  new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Colombo', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(d);
 
-export function OpenShiftCard({ laneId, laneName }: { laneId: string; laneName: string }) {
-  const [state, action, pending] = useActionState(openShift, initial);
-  return (
-    <div className="flex flex-1 items-center justify-center p-6">
-      <Card className="w-full max-w-sm p-6">
-        <form action={action} className="flex flex-col gap-4">
-          <div>
-            <h1 className="text-xl font-bold">Open a shift</h1>
-            <p className="mt-1 text-[13px] text-text-muted">{laneName} has no open shift. Count the float in the drawer to start selling.</p>
-          </div>
-          {state.error ? <Alert>{state.error}</Alert> : null}
-          <input type="hidden" name="laneId" value={laneId} />
-          <Field label="Opening float (Rs)"><Input name="float" inputMode="decimal" defaultValue="5,000.00" autoFocus /></Field>
-          <Button type="submit" disabled={pending}>{pending ? 'Opening…' : 'Open shift'}</Button>
-        </form>
-      </Card>
-    </div>
-  );
-}
-
-export function CloseShiftDialog({ shiftId, onClose }: { shiftId: string; onClose: () => void }) {
-  const [state, action, pending] = useActionState(closeShift, initial);
+// Open shift (Figma 11-2885): count the float by note, optionally reserve invoice numbers for offline use.
+export function OpenShiftCard({ laneId, laneCode, cashier }: { laneId: string; laneCode: string; cashier: string }) {
   const router = useRouter();
-
-  if (state.result) {
-    const v = state.result.varianceCents;
-    return (
-      <Dialog title="Shift closed" onClose={() => router.refresh()}>
-        <dl className="grid grid-cols-2 gap-y-2 text-[13px]">
-          <dt className="text-text-muted">Expected cash</dt><dd className="text-right font-semibold">{formatRs(state.result.expectedCashCents)}</dd>
-          <dt className="text-text-muted">Counted</dt><dd className="text-right font-semibold">{formatRs(state.result.countedCashCents)}</dd>
-          <dt className="text-text-muted">Variance</dt>
-          <dd className={v === 0 ? 'text-right font-bold text-success' : 'text-right font-bold text-danger'}>
-            {v === 0 ? 'Balanced' : `${v > 0 ? 'Over' : 'Short'} ${formatRs(Math.abs(v))}`}
-          </dd>
-        </dl>
-        <Button onClick={() => router.refresh()}>Done</Button>
-      </Dialog>
-    );
-  }
+  const [denoms, setDenoms] = useState<Denoms>({});
+  const [reserve, setReserve] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const total = denomsTotal(denoms);
 
   return (
-    <Dialog title="Close shift" onClose={onClose}>
-      <form action={action} className="flex flex-col gap-4">
-        <p className="text-[13px] text-text-muted">Count all cash in the drawer, including the float.</p>
-        {state.error ? <Alert>{state.error}</Alert> : null}
-        <input type="hidden" name="shiftId" value={shiftId} />
-        <Field label="Counted cash (Rs)"><Input name="counted" inputMode="decimal" required /></Field>
-        <Button type="submit" variant="danger" disabled={pending}>{pending ? 'Closing…' : 'Close shift'}</Button>
-      </form>
-    </Dialog>
+    <div className="flex flex-1 items-start justify-center overflow-y-auto bg-[#2b3a4a] p-6 sm:pt-14">
+      <div className="flex w-full max-w-[560px] flex-col gap-4 rounded-dialog bg-surface p-7 shadow-[0_8px_24px_rgba(15,23,41,0.12)]">
+        <div>
+          <h1 className="text-[22px] font-bold">Open shift</h1>
+          <p className="mt-1 text-[13px] text-text-muted">Lane {laneCode} · {cashier} · {when(new Date())}</p>
+        </div>
+        <DenominationTable value={denoms} onChange={setDenoms} />
+        <div className="flex justify-between text-[13px] font-semibold">
+          <span>Opening float</span><span className="tabular-nums">{formatRs(total)}</span>
+        </div>
+        <div className="flex items-center justify-between gap-4 text-[13px] font-semibold">
+          Reserve 200 invoice numbers for offline use
+          <Switch on={reserve} onChange={setReserve} label="Reserve invoice numbers for offline use" />
+        </div>
+        {error ? <Alert>{error}</Alert> : null}
+        <div className="flex gap-3">
+          <Link href="/lane" className={buttonClass('secondary')}>Cancel</Link>
+          <div className="flex-1" />
+          <Button
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              const r = await openShift({ laneId, floatCents: total, denoms, reserve: reserve ? 200 : 0 });
+              setBusy(false);
+              if (r.error) setError(r.error);
+              else router.refresh();
+            }}
+          >
+            {busy ? 'Opening…' : 'Open shift & start selling'}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }

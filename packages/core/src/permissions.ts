@@ -47,3 +47,21 @@ export const DEFAULT_ROLES = {
 } as const;
 
 export type RoleKey = keyof typeof DEFAULT_ROLES;
+
+/** Plain-language names for the permission toggles in Users & roles (Figma 1-3237). */
+export const PERM_LABEL: Record<Permission, { label: string; hint?: string }> = {
+  'sale.create': { label: 'Sell at the lane' },
+  'return.create': { label: 'Returns with receipt' },
+  'item.edit': { label: 'Edit items & prices' },
+  'stock.adjust': { label: 'Stock adjustments', hint: 'Counts, damage, wastage' },
+  'grn.post': { label: 'Receive goods (GRN)', hint: 'Purchase orders too' },
+  'promotion.manage': { label: 'Promotions & labels' },
+  'staff.manage': { label: 'Manage staff', hint: 'Add users, set PINs, reset access' },
+  'reports.view': { label: 'View reports' },
+  'settings.manage': { label: 'Business settings', hint: 'Owner only by default' },
+  'cash.pickup': { label: 'Cash pickups', hint: 'Needs supervisor' },
+  'shift.manage': { label: 'Open & close any shift' },
+  'transfer.approve': { label: 'Approve transfers' },
+  'customer.manage': { label: 'Customers & credit', hint: 'Receive payments, set limits' },
+  'supplier.manage': { label: 'Suppliers & payments' },
+};

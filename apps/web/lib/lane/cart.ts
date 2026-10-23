@@ -15,6 +15,10 @@ export interface CatalogItem {
   isPinned: boolean;
   stockMilli: number;
   barcodes: string[];
+  /** Case barcodes: scanning one adds `qty` units. */
+  packBarcodes?: { code: string; qty: number }[];
+  taxClass?: 'standard' | 'exempt' | 'zero';
+  isReturnable?: boolean;
 }
 
 export interface CatalogPromotion {
@@ -25,14 +29,19 @@ export interface CatalogPromotion {
   bundlePriceCents: number | null;
   percentBp: number | null;
   itemIds: string[];
+  endsAt?: string | null;
 }
 
 /** Shape returned by api.lane_catalog. */
 export interface LaneCatalog {
-  lane: { id: string; code: string; name: string; status: string };
+  lane: { id: string; code: string; name: string; status: string; registered: boolean };
+  activeMember: { id: string; name: string } | null;
   shop: { id: string; code: string; name: string };
   tenant: { name: string; roundingUnitCents: number; embeddedBarcodeMode: EmbeddedMode; catalogVersion: number };
-  shift: { id: string; shiftNo: number; openedAt: string; cashier: string } | null;
+  shift: {
+    id: string; shiftNo: number; openedAt: string; cashier: string;
+    reservedFrom: number | null; reservedTo: number | null; nextReserved: number | null;
+  } | null;
   departments: { id: string; name: string }[];
   items: CatalogItem[];
   promotions: CatalogPromotion[];
@@ -47,19 +56,26 @@ export interface CartLine {
 export interface CatalogIndex {
   byId: Map<string, CatalogItem>;
   byBarcode: Map<string, CatalogItem>;
+  /** Units per scan for case barcodes (absent = 1). */
+  packQty: Map<string, number>;
   byPlu: Map<number, CatalogItem>;
 }
 
 export function indexCatalog(items: CatalogItem[]): CatalogIndex {
   const byId = new Map<string, CatalogItem>();
   const byBarcode = new Map<string, CatalogItem>();
+  const packQty = new Map<string, number>();
   const byPlu = new Map<number, CatalogItem>();
   for (const item of items) {
     byId.set(item.id, item);
     if (item.plu != null) byPlu.set(item.plu, item);
     for (const code of item.barcodes) byBarcode.set(code, item);
+    for (const p of item.packBarcodes ?? []) {
+      byBarcode.set(p.code, item);
+      packQty.set(p.code, p.qty);
+    }
   }
-  return { byId, byBarcode, byPlu };
+  return { byId, byBarcode, packQty, byPlu };
 }
 
 export type ScanOutcome =
@@ -79,7 +95,7 @@ export function resolveScan(index: CatalogIndex, raw: string, mode: EmbeddedMode
     case 'code': {
       const item = index.byBarcode.get(scan.code);
       if (!item) return { ok: false, message: `No item with barcode ${scan.code}.` };
-      return { ok: true, item, qtyMilli: 1000, needs: needsFor(item) };
+      return { ok: true, item, qtyMilli: 1000 * (index.packQty.get(scan.code) ?? 1), needs: needsFor(item) };
     }
     case 'plu': {
       const item = index.byPlu.get(scan.plu);

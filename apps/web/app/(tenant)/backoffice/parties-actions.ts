@@ -36,16 +36,20 @@ export async function createSupplier(prev: PartyFormState, form: FormData): Prom
   const ctx = await requireTenant('supplier.manage');
   const parsed = SupplierInput.safeParse({
     name: form.get('name'),
+    contactName: String(form.get('contactName') ?? '').trim() || null,
     phone: phoneOrRaw(form.get('phone')),
     email: String(form.get('email') ?? '').trim() || null,
+    vatNo: String(form.get('vatNo') ?? '').trim() || null,
     paymentTermsDays: Number(form.get('paymentTermsDays') || 30),
     isSaleOrReturn: form.get('isSaleOrReturn') === 'on',
+    dailyDelivery: form.get('dailyDelivery') === 'on',
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
   const v = parsed.data;
   const { error } = await ctx.supabase.from('suppliers').insert({
-    tenant_id: ctx.tenant.id, name: v.name, phone: v.phone ?? null, email: v.email ?? null,
-    payment_terms_days: v.paymentTermsDays, is_sale_or_return: v.isSaleOrReturn, created_by: ctx.userId,
+    tenant_id: ctx.tenant.id, name: v.name, contact_name: v.contactName ?? null, phone: v.phone ?? null, email: v.email ?? null,
+    vat_no: v.vatNo ?? null, payment_terms_days: v.paymentTermsDays, is_sale_or_return: v.isSaleOrReturn,
+    daily_delivery: v.dailyDelivery, created_by: ctx.userId,
   });
   if (error) return { error: error.code === '23505' ? 'A supplier with this name already exists.' : dbErrorText(error) };
   revalidatePath('/backoffice/suppliers');

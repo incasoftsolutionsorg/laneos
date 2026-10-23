@@ -7,6 +7,7 @@
   },
   "scripts": {
     "dev": "pnpm --filter @laneos/web dev",
+    "preview": "pnpm --filter @laneos/web build && pnpm --filter @laneos/web start",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "vitest run",
