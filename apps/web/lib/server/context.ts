@@ -18,20 +18,24 @@ export const getContext = cache(async () => {
   const userId = data.claims.sub;
   const email = (data.claims.email as string | undefined) ?? '';
 
-  const { data: member } = await supabase
+  const findMember = () => supabase
     .from('members')
-    .select('id, display_name, tenant_id, all_shops, role:roles(key, name, permissions)')
+    .select('id, display_name, tenant_id, all_shops, perms_add, perms_remove, role:roles(key, name, permissions)')
     .eq('user_id', userId)
     .eq('is_active', true)
     .order('created_at')
     .limit(1)
     .maybeSingle();
+  let { data: member } = await findMember();
+  // First sign-in after a staff invite: link the invited membership to this login.
+  if (!member && (await supabase.schema('api').rpc('claim_invite')).data) ({ data: member } = await findMember());
 
   if (!member) return { supabase, userId, email, member: null } as const;
 
   const [{ data: tenant }, { data: allShops }, { data: memberShops }] = await Promise.all([
-    supabase.from('tenants').select('id, name, plan_id, status, rounding_unit_cents').eq('id', member.tenant_id).single(),
-    supabase.from('shops').select('id, code, name').eq('is_active', true).order('code'),
+    supabase.from('tenants').select('id, name, plan_id, status, rounding_unit_cents, brand_color, theme, auto_seasonal_theme, idle_timeout_min, require_2fa, entitlements:tenant_entitlements(max_shops, transfers, head_office)').eq('id', member.tenant_id).single(),
+    // Oldest first: with no shop chosen yet, the business's first shop is the default.
+    supabase.from('shops').select('id, code, name').eq('is_active', true).order('created_at'),
     supabase.from('member_shops').select('shop_id').eq('member_id', member.id),
   ]);
 
@@ -45,7 +49,7 @@ export const getContext = cache(async () => {
     supabase,
     userId,
     email,
-    member: { id: member.id, name: member.display_name, roleKey: role.key, roleName: role.name, perms: Number(role.permissions) },
+    member: { id: member.id, name: member.display_name, roleKey: role.key, roleName: role.name, perms: (Number(role.permissions) | Number(member.perms_add)) & ~Number(member.perms_remove) },
     tenant: tenant!,
     shops,
     shop,

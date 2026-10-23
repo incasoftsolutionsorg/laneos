@@ -17,20 +17,23 @@ export async function saveItem(_: ItemFormState, form: FormData): Promise<ItemFo
   const ctx = await requireTenant('item.edit');
   const id = String(form.get('id') ?? '') || null;
   const priceCents = rupees(form.get('price'));
-  const itemType = String(form.get('itemType') ?? 'standard');
-  const reorder = Number(form.get('reorderLevel') || 0);
+  let barcodes: unknown = [];
+  try { barcodes = JSON.parse(String(form.get('barcodes') || '[]')); } catch { /* validated below */ }
 
   const parsed = ItemInput.safeParse({
     name: form.get('name'),
+    brand: String(form.get('brand') ?? '').trim() || null,
     departmentId: String(form.get('departmentId') ?? '') || null,
-    itemType,
+    itemType: form.get('itemType') ?? 'standard',
     taxClass: form.get('taxClass') ?? 'standard',
     plu: form.get('plu') ? Number(form.get('plu')) : null,
-    barcode: String(form.get('barcode') ?? '').trim().toUpperCase() || null,
+    barcodes,
     priceCents: priceCents ?? -1,
     mrpCents: rupees(form.get('mrp')),
     costCents: rupees(form.get('cost')),
-    reorderLevelMilli: Math.round(reorder * 1000),
+    wholesaleCents: rupees(form.get('wholesale')),
+    minPriceCents: rupees(form.get('minPrice')),
+    reorderLevelMilli: Math.round(Number(form.get('reorderLevel') || 0) * 1000),
     isReturnable: form.get('isReturnable') === 'on',
     trackBatches: form.get('trackBatches') === 'on',
     isPinned: form.get('isPinned') === 'on',
@@ -63,4 +66,5 @@ export async function deactivateItem(form: FormData) {
   const ctx = await requireTenant('item.edit');
   await ctx.supabase.from('items').update({ is_active: false }).eq('id', String(form.get('id')));
   revalidatePath('/backoffice/items');
+  if (form.get('back')) redirect('/backoffice/items');
 }

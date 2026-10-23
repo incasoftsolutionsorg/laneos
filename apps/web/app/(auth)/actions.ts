@@ -3,6 +3,7 @@
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
+import { normalizeLkPhone } from '@laneos/core';
 import { createClient } from '@/lib/supabase/server';
 
 export interface FormState { error?: string; message?: string }
@@ -31,6 +32,11 @@ export async function signIn(_: FormState, form: FormData): Promise<FormState> {
         : 'That email and password do not match.',
     };
   }
+  // An enrolled authenticator means a code is needed before the back office opens.
+  const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (aal?.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') {
+    redirect(`/login/mfa?next=${encodeURIComponent(safeNext(form.get('next')))}`);
+  }
   redirect(safeNext(form.get('next')));
 }
 
@@ -38,9 +44,15 @@ const Register = z.object({
   ownerName: z.string().trim().min(2, 'Enter your name').max(80),
   email: z.email('Enter a valid email'),
   password: z.string().min(10, 'Use at least 10 characters'),
-  businessName: z.string().trim().min(2, 'Enter the business name').max(120),
-  shopName: z.string().trim().min(2, 'Enter the shop name').max(120),
+  businessName: z.string().trim().min(2, 'Enter the shop name').max(120),
+  shopName: z.string().trim().min(2, 'Enter the first shop name').max(120),
   shopCode: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{2,8}$/, 'Shop code: 2–8 letters or digits, e.g. KDY1'),
+  businessRegNo: z.string().trim().max(40).optional(),
+  mobile: z.string().trim().refine((v) => normalizeLkPhone(v) != null, 'Enter a mobile number like 077 123 4567'),
+  city: z.string().trim().max(60).optional(),
+  businessType: z.enum(['grocery', 'supermarket', 'pharmacy', 'hardware', 'other']),
+  plan: z.enum(['lite', 'single', 'growth']),
+  agree: z.literal('on', { message: 'Agree to the Terms and the Data Processing Agreement to continue' }),
 });
 
 export async function register(_: FormState, form: FormData): Promise<FormState> {
@@ -55,7 +67,10 @@ export async function register(_: FormState, form: FormData): Promise<FormState>
     password: v.password,
     options: {
       emailRedirectTo: `${await origin()}/auth/callback?next=/backoffice`,
-      data: { pending_tenant: { businessName: v.businessName, shopName: v.shopName, shopCode: v.shopCode, ownerName: v.ownerName } },
+      data: { pending_tenant: {
+        businessName: v.businessName, shopName: v.shopName, shopCode: v.shopCode, ownerName: v.ownerName, plan: v.plan,
+        details: { businessRegNo: v.businessRegNo, city: v.city, businessType: v.businessType, mobile: normalizeLkPhone(v.mobile) },
+      } },
     },
   });
   if (error) return { error: error.message };

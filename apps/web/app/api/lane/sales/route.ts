@@ -6,6 +6,7 @@ const MAX_BODY_BYTES = 256 * 1024;
 
 // POST /api/lane/sales (blueprint §23.2): validate strictly, then let api.create_sale re-price
 // and write everything in one transaction. The Idempotency-Key header must equal clientUuid.
+// X-Lane-Key (the registered device key, blueprint §27.5.1) is checked inside api.create_sale.
 export async function POST(req: Request) {
   const supabase = await createClient();
   const { data: claims } = await supabase.auth.getClaims();
@@ -25,9 +26,11 @@ export async function POST(req: Request) {
   if (req.headers.get('Idempotency-Key') !== parsed.data.clientUuid) {
     return apiError(400, 'VALIDATION_ERROR', 'Idempotency-Key must equal clientUuid');
   }
-  // Lane key check (X-Lane-Key, blueprint §27.5.1) is added with device registration.
 
-  const { data, error } = await supabase.schema('api').rpc('create_sale', { p: parsed.data });
+  const laneKey = req.headers.get('X-Lane-Key');
+  const { data, error } = await supabase.schema('api').rpc('create_sale', {
+    p: { ...parsed.data, ...(laneKey ? { laneKey } : {}) },
+  });
   if (error) return dbErrorResponse(error);
   const result = data as { replayed?: boolean };
   return Response.json(data, { status: result.replayed ? 200 : 201 });

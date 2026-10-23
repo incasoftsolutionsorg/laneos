@@ -10,12 +10,13 @@ export default async function NewItemPage() {
   const { data: departments } = await ctx.supabase.from('departments').select('id, name').eq('is_active', true).order('sort_order').order('name');
   return (
     <>
-      <PageHeader title="Add item" subtitle="Price goes into the standard price list; lanes pick it up on their next sync." />
+      <PageHeader title="Add item" subtitle="The price goes into the standard price list; lanes pick it up on their next sync and a shelf label is queued." />
       <ItemForm
         departments={departments ?? []}
         values={{
-          name: '', departmentId: null, itemType: 'standard', taxClass: 'standard', plu: null, barcode: null,
-          price: '', mrp: '', cost: '', reorderLevel: '0', isReturnable: true, trackBatches: false, isPinned: false,
+          name: '', brand: '', departmentId: null, itemType: 'standard', taxClass: 'standard', plu: null, barcodes: [],
+          price: '', mrp: '', cost: '', wholesale: '', minPrice: '', reorderLevel: '0',
+          isReturnable: true, trackBatches: false, isPinned: false,
         }}
       />
     </>

@@ -5,7 +5,7 @@
 | Field | Value | Field | Value |
 | --- | --- | --- | --- |
 | **Document ID** | DOC-08 | **Owner** | Tech Lead (P1) |
-| **Version / Date** | v0.2 / 2026-10-22 | **Status** | Draft — matches the staging database |
+| **Version / Date** | v0.7 / 2026-10-23 | **Status** | Draft — matches the staging database |
 | **Database** | Supabase project `ciwuznyiimaxlxmqhvgr` (staging), PostgreSQL 17 | **Source of truth** | `supabase/migrations/*.sql` |
 
 > **Keep this file in step with the database.** Every PR that adds a migration updates this file in the same PR: the table catalogue (§3), the functions (§5) and the migration log (§7). The unit test `scripts/test/data-model-doc.test.ts` fails if a table or migration is missing here.
@@ -28,16 +28,16 @@ Four levels, matching blueprint §21.2:
 | Level | Tables | Key columns |
 | --- | --- | --- |
 | **Platform** | `plans`, `permissions`, `platform_admins` | shared by every tenant |
-| **Tenant** (business) | `tenants`, `tenant_entitlements`, `roles`, `members`, `member_shops`, `departments`, `items`, `barcodes`, `price_lists`, `price_list_items`, `promotions`, `promotion_items`, `customers`, `suppliers`, `session_resets`, `audit_log` | `tenant_id` |
-| **Shop** | `shops`, `lanes`, `stock_levels`, `stock_movements`, `shifts`, `sales`, `sale_lines`, `sale_payments` | `tenant_id` + `shop_id` |
-| **Lane** | (browser storage, not in the database) | — |
+| **Tenant** (business) | `tenants`, `tenant_entitlements`, `roles`, `members`, `member_shops`, `departments`, `items`, `barcodes`, `price_lists`, `price_list_items`, `promotions`, `promotion_items`, `customers`, `suppliers`, `credit_notes`, `credit_note_redemptions`, `damage_decisions`, `supplier_ledger`, `purchase_order_lines`, `grn_lines`, `supplier_payment_allocations`, `session_resets`, `audit_log` | `tenant_id` |
+| **Shop** | `shops`, `lanes`, `doc_counters`, `stock_levels`, `stock_movements`, `stock_batches`, `stock_counts`, `stock_count_lines`, `label_queue`, `purchase_orders`, `grns`, `supplier_payments`, `shifts`, `cash_pickups`, `sales`, `sale_lines`, `sale_payments`, `returns`, `return_lines`, `damage_reports`, `sync_issues` | `tenant_id` + `shop_id` |
+| **Lane** (device, not in the database) | IndexedDB: lane key, offline sale queue · localStorage: held bills, last lane, reserved-invoice counter | — |
 
 A single shop is a tenant with one shop; a chain is a tenant with many. There is no separate code path.
 
 **Three rules keep the numbers right** (blueprint §21.4):
 
 1. **Ledger + cached balance in one transaction.** `stock_movements` is the history; `stock_levels` is the fast answer. `app.post_movement` writes both together.
-2. **Append-only money.** `sales`, `sale_lines`, `sale_payments`, `stock_movements` and `audit_log` reject UPDATE and DELETE with a trigger. Mistakes are fixed with new rows.
+2. **Append-only money.** `sales`, `sale_lines`, `sale_payments`, `stock_movements`, `returns`, `return_lines`, `cash_pickups`, `credit_note_redemptions`, `damage_decisions` and `audit_log` reject UPDATE and DELETE with a trigger. Mistakes are fixed with new rows.
 3. **Catalogue versioning.** Any change to `items`, `barcodes`, `price_list_items`, `promotions` or `promotion_items` adds 1 to `tenants.catalog_version`, so lanes can ask "what changed since version N?".
 
 ## 2. Entity relationship diagram
@@ -82,9 +82,24 @@ erDiagram
     TENANTS ||--o{ SUPPLIERS : ""
     TENANTS ||--o{ AUDIT_LOG : ""
     TENANTS ||--o{ SESSION_RESETS : ""
+
+    SHIFTS ||--o{ CASH_PICKUPS : "cash to safe"
+    SALES ||--o{ RETURNS : "returned in"
+    RETURNS ||--|{ RETURN_LINES : contains
+    SALE_LINES ||--o{ RETURN_LINES : "comes back as"
+    SHIFTS |o--o{ RETURNS : "cash refunds"
+    RETURNS ||--o| CREDIT_NOTES : "settled as"
+    CREDIT_NOTES ||--o{ CREDIT_NOTE_REDEMPTIONS : "spent in"
+    SALES ||--o{ CREDIT_NOTE_REDEMPTIONS : "paid by"
+    RETURN_LINES ||--o| DAMAGE_REPORTS : "damaged goods"
+    ITEMS ||--o{ DAMAGE_REPORTS : ""
+    DAMAGE_REPORTS ||--o{ DAMAGE_DECISIONS : "resolved by"
+    LANES ||--o{ SYNC_ISSUES : "refused offline sales"
+    SHOPS ||--o{ DOC_COUNTERS : "numbers RTN/CN/DMG"
+    MEMBERS |o--o{ LANES : "unlocked by PIN"
 ```
 
-`STOCK_LEVELS → STOCK_MOVEMENTS` is a logical link (same `shop_id` + `item_id`), not a foreign key.
+`STOCK_LEVELS → STOCK_MOVEMENTS` is a logical link (same `shop_id` + `item_id`), not a foreign key. `DAMAGE_REPORTS.source_ref_id` points at the return line (or later a GRN / count line) without a foreign key, because the source table varies.
 
 ## 3. Table catalogue
 
@@ -93,7 +108,7 @@ Money is `bigint` cents, quantities are `bigint` milli-units (1 piece = 1000; we
 ### 3.1 Platform
 
 #### `plans`
-Subscription plans and their limits. Seeded: `single` (1 shop, 3 lanes), `growth` (3 shops, 6 lanes, transfers), `chain` (30 shops, 12 lanes, head office, transfers).
+Subscription plans and their limits, as on the sign-up page (Figma 1-90, since 20261023090600): `lite` Kade Lite (Rs 2,900, 1 shop, 1 lane, 3 staff), `single` Store Pro (Rs 5,400, 1 shop, 4 lanes, 10 staff), `growth` Multi-store (Rs 4,900 **per shop**, 5 shops, 4 lanes each, transfers, 40 staff), `chain` Chain (custom price, 30 shops, head office). `apps/web/lib/plans.ts` repeats them for the public sign-up page.
 
 | Column | Type | Notes |
 | --- | --- | --- |
@@ -101,6 +116,7 @@ Subscription plans and their limits. Seeded: `single` (1 shop, 3 lanes), `growth
 | `name`, `price_cents` | text, bigint | monthly price |
 | `max_shops`, `max_lanes_per_shop` | integer | copied into `tenant_entitlements` |
 | `head_office`, `transfers`, `is_active` | boolean | |
+| `description`, `per_shop`, `is_custom`, `max_staff`, `sort_order` | | price per shop; custom = arranged by LaneOS (cannot be self-selected); staff seat limit |
 
 RLS read: any signed-in user. Writes: migrations / platform admin only.
 
@@ -124,7 +140,9 @@ The permission bits used in role masks. Must match `packages/core/src/permission
 
 #### `tenants`
 One business. `status` (`trial`/`active`/`past_due`/`suspended`/`cancelled`), `plan_id` → `plans`, `slug` (unique), `rounding_unit_cents` (cash rounding; default 100 = nearest rupee), `embedded_barcode_mode` (`weight` or `price` scale labels), `catalog_version`, `timezone` (default `Asia/Colombo`).
-RLS read: own tenant (or platform admin). Update: `settings.manage`. Insert: only `api.create_tenant`.
+RLS read: own tenant (or platform admin). Update: only `api.update_tenant_settings` (direct UPDATE revoked in 20261023090600). Insert: only `api.create_tenant`.
+
+**Settings columns (20261023090600):** general — `business_reg_no`, `city`, `business_type`; branding — `brand_color` (`#RRGGBB`), `theme` (`default`/`christmas`/`awurudu`/`vesak`/`deepavali`/`ramadan`), `auto_seasonal_theme`; tax — `vat_registered`, `vat_no`, `prices_include_vat`; receipt — `receipt_paper` (`80mm`/`58mm`/`a4`), `receipt_header`, `receipt_footer`, `receipt_print_logo`, `receipt_silent`, `receipt_open_drawer`, `receipt_local_language`; security (§27.6) — `require_2fa` (`owners`/`managers`/`all`), `strict_sessions`, `idle_timeout_min`, `lane_lock_min`, `failed_login_limit`, `failed_login_lock_min`, `pin_length_min`, `pin_change_days`, `credit_note_cash_out`, `export_owner_only`, `login_alerts`; credit — `customer_credit_days`; billing — `trial_ends_on`, `next_charge_on`.
 
 #### `tenant_entitlements`
 `tenant_id` PK → `tenants`. `max_shops`, `max_lanes_per_shop`, `head_office`, `transfers` — copied from the plan at sign-up, may be overridden per tenant. Read: own tenant. Writes: functions only.
@@ -133,13 +151,14 @@ RLS read: own tenant (or platform admin). Update: `settings.manage`. Insert: onl
 `tenant_id` → `tenants`; `code` (e.g. `KDY1`, unique per tenant), `name`, `address`, `phone`, `is_active`. Read: own tenant. Update: `settings.manage`. Insert: `api.create_tenant` (more shops: head-office task).
 
 #### `lanes`
-A checkout terminal. `tenant_id`, `shop_id` → `shops`; `code` (`L1`, `L2`… unique per shop), `name`, `status` (`active`/`disabled`), `key_hash` (device binding; key never stored), `registered_at`, `last_seen_at`, `invoice_seq` (per-lane invoice counter, BR-003). Read: own tenant **and** a shop the user can access. Insert: `api.add_lane` (enforces `max_lanes_per_shop`).
+A checkout terminal. `tenant_id`, `shop_id` → `shops`; `code` (`L1`, `L2`… unique per shop), `name`, `status` (`active`/`disabled`), `key_hash` (device binding; key never stored), `registered_at`, `last_seen_at`, `invoice_seq` (per-lane invoice counter, BR-003). Read: own tenant **and** a shop the user can access. Insert: `api.add_lane` (enforces `max_lanes_per_shop`). `printer_name` (20261023090600) is the receipt printer for QZ Tray; updatable with `name`, `status`.
 
 #### `roles`
 `tenant_id`, `key` (unique per tenant), `name`, `permissions` (bitmask), `is_system`. Five system roles are created per tenant: owner 16383, manager 14079, cashier 3, stock_keeper 24, accountant 8320. Read: own tenant. Writes: functions only.
 
 #### `members`
-A person working for a tenant. `tenant_id`, `user_id` → `auth.users` (null for PIN-only cashiers), `role_id` → `roles`, `display_name`, `phone`, `all_shops`, `pin_hash` (Argon2id; never the PIN), `perm_v` (bumped to revoke old tokens), `is_active`. Unique `(tenant_id, user_id)`. Read: own tenant. Writes: functions only.
+A person working for a tenant. `tenant_id`, `user_id` → `auth.users` (null for PIN-only cashiers), `role_id` → `roles`, `display_name`, `phone`, `all_shops`, `pin_hash` (bcrypt; never the PIN), `perm_v` (bumped to revoke old tokens), `is_active`. Unique `(tenant_id, user_id)`. Read: own tenant. Writes: functions only.
+Since 20261023090600: `staff_code` (cashier code, unique per tenant), `perms_add` / `perms_remove` (per-person changes to the role mask: effective = `(role | add) & ~remove`, used by `app.permissions()` and the token hook), `invite_email` (an invited login not yet claimed; linked by `api.claim_invite` at first sign-in), `language` (`en`/`si`/`ta`).
 
 #### `member_shops`
 `(member_id, shop_id)` PK, `tenant_id`. Which shops a member may work in when `all_shops = false`.
@@ -162,7 +181,7 @@ Append-only. `tenant_id`, `actor_id`, `action` (e.g. `tenant.create`, `lane.crea
 PK `(tenant_id, code)` — named `barcodes_pkey` (maps to `DUPLICATE_BARCODE`). `item_id` → `items`. Written by `api.upsert_item`.
 
 #### `price_lists`
-`tenant_id`, `name`, `is_default` (exactly one default per tenant, created automatically with the tenant as "Standard").
+`tenant_id`, `name`, `is_default` (exactly one default per tenant, created automatically with the tenant as "Standard"), `discount_bp` + `applies_to` (20261023090600: a buyer-group rule such as "Wholesale A · −8 % · Retailers", Settings → Tax & rates; saved with `api.save_price_rule`).
 
 #### `price_list_items`
 PK `(price_list_id, item_id)`, `tenant_id`, `price_cents`. Trigger `app.check_price_vs_mrp` raises `ABOVE_MRP` if the price is above the item's MRP (BR-011). Written by `api.upsert_item`.
@@ -176,7 +195,7 @@ PK `(promotion_id, item_id)`, `tenant_id`. Which items a promotion covers.
 ### 3.4 Parties (tenant level)
 
 #### `customers`
-`tenant_id`, `name`, `phone` (`+947XXXXXXXX`, unique per tenant: `customers_tenant_phone`), `email`, `credit_limit_cents`, `balance_due_cents` (cached; the customer ledger comes with credit sales), `loyalty_points`, `marketing_consent` (PDPA), `is_active`. Read: own tenant. Insert/update: `customer.manage`. Never deleted.
+`tenant_id`, `name`, `phone` (`+947XXXXXXXX`, unique per tenant: `customers_tenant_phone`), `email`, `credit_limit_cents`, `balance_due_cents` (cached sum of `customer_ledger`; not updatable directly since 20261023090700), `loyalty_points`, `marketing_consent` (PDPA), `is_active`. Read: own tenant. Insert/update: `customer.manage` (update limited to name, phone, email, limit, consent, active). Never deleted.
 
 #### `suppliers`
 `tenant_id`, `name` (unique per tenant), `phone`, `email`, `payment_terms_days`, `is_sale_or_return`, `balance_due_cents`, `is_active`. Read: own tenant. Insert/update: `supplier.manage`.
@@ -198,10 +217,131 @@ Append-only ledger. `tenant_id`, `shop_id`, `item_id`, `qty_milli` (signed), `re
 Append-only. `tenant_id`, `shop_id`, `lane_id`, `shift_id` → `shifts`, `invoice_no` (`KDY1-L1-000124`, unique per lane), `customer_id` → `customers` (optional), `member_id` → `members`, `subtotal_cents`, `promo_cents`, `rounding_cents`, `total_cents`, `paid_cents`, `change_cents`, `balance_due_cents`, `client_uuid` (idempotency key; unique per tenant `sales_idem`). Indexes: `(shop_id, created_at desc)`, BRIN on `created_at`. Writes: only `api.create_sale`.
 
 #### `sale_lines`
-Append-only. `sale_id` → `sales`, `tenant_id`, `shop_id`, `line_no`, `item_id` → `items`, `item_name` (snapshot), `item_type`, `tax_class`, `qty_milli`, `unit_price_cents`, `gross_cents`, `promo_cents`, `net_cents`, `promotion_id` → `promotions`.
+Append-only. `sale_id` → `sales`, `tenant_id`, `shop_id`, `line_no`, `item_id` → `items`, `item_name` (snapshot), `item_type`, `tax_class`, `qty_milli`, `unit_price_cents`, `gross_cents`, `promo_cents`, `net_cents`, `promotion_id` → `promotions`, `unit_cost_cents` (20261023090700: average cost snapshot set by trigger `app.sale_line_cost`; the margin report uses it; older rows were back-filled with the cost at that time).
 
 #### `sale_payments`
-Append-only. `sale_id` → `sales`, `tenant_id`, `shop_id`, `method` (`cash`/`card`/`lankaqr`/`credit_note`), `amount_cents`, `reference` (approval code or last 4 digits — never a card number, CST-004).
+Append-only. `sale_id` → `sales`, `tenant_id`, `shop_id`, `method` (`cash`/`card`/`lankaqr`/`credit_note`/`account`; `account` = on account for a named credit customer, since 20261023090600), `amount_cents`, `reference` (approval code or last 4 digits — never a card number, CST-004; for credit notes the note number `CN-…`, never the code).
+
+Since migration `20261023090000`, `sales` also has `receipt_token` (32 hex characters, unique) for the public digital receipt `/r/<token>`, and `shifts` has `opening_denoms` / `closing_denoms` (note value in cents → count, plus `coins`), `variance_note`, and `reserved_from` / `reserved_to` (invoice numbers kept for offline use when the shift was opened).
+
+### 3.7 Lane operations, returns and credit notes
+
+#### `doc_counters`
+PK `(shop_id, kind)`, `seq`. Running numbers per shop for documents: `RTN-KDY1-000001` (returns), `CN-KDY1-000001` (credit notes), `DMG-KDY1-000001` (damage reports). Only `app.next_doc_no()` touches it; no API access at all.
+
+#### `cash_pickups`
+Append-only. `tenant_id`, `shop_id`, `shift_id` → `shifts`, `amount_cents`, `note`, `member_id` → `members`. Cash taken from the drawer to the safe during a shift; lowers the expected cash at close. Written by `api.cash_pickup` (`cash.pickup`).
+
+#### `returns`
+Append-only. `tenant_id`, `shop_id`, `lane_id`, `shift_id` (set only for cash refunds — the cash leaves that drawer), `sale_id` → `sales`, `return_no`, `customer_id`, `settlement` (`cash` / `original` / `exchange` / `credit_note` / `credit_balance`), `total_cents`, `member_id` (cashier), `approved_by` (supervisor whose PIN approved a large cash refund), `client_uuid` (idempotent). Written by `api.process_return`.
+
+#### `return_lines`
+Append-only. `return_id` → `returns`, `sale_line_id` → `sale_lines`, `item_id`, `item_name`, `qty_milli`, `value_cents` (the line's net value × returned share), `reason` (`changed_mind`/`wrong_item`/`damaged`/`expired`/`quality`/`other`), `restock` (`sellable` → back into stock through the ledger; `damaged` → the damaged bucket + a damage report). The sum of returned quantity per sale line can never exceed what was sold (BR-040).
+
+#### `credit_notes`
+`tenant_id`, `shop_id` (issuing shop), `note_no`, `code_hash` (HMAC-SHA256 of the 12-character Crockford Base32 code with a key kept in Supabase Vault — the code itself is never stored), `code_last4`, `return_id`, `customer_id`, `amount_cents`, `balance_cents`, `expires_on` (tenant setting `credit_note_days`, default 90), `status` (`active`/`partially_used`/`used`/`expired`/`cancelled`/`cashed_out`), `issued_by`, `reason`, `replaced_by`. Read by the whole tenant (any shop may redeem when `tenants.credit_note_any_shop`). Written by `api.process_return`, `api.create_sale` (redeem), `api.extend_credit_note`, `api.cancel_credit_note`.
+
+#### `credit_note_redemptions`
+Append-only. `credit_note_id` → `credit_notes`, `sale_id` → `sales`, `shop_id`, `lane_id`, `amount_cents`, `redeemed_by`. `api.create_sale` locks the note row (`FOR UPDATE`), so two lanes cannot spend the same balance (TC-CRN-003, covered by `pnpm test:db`).
+
+#### `damage_reports`
+`tenant_id`, `shop_id`, `report_no`, `item_id`, `qty_milli`, `remaining_milli` (still awaiting a decision), `unit_cost_cents` (snapshot), `source` (`shelf`/`grn`/`customer_return`/`transfer`/`count`), `source_ref_id`, `reason` (`broken`/`leaking`/`crushed`/`pest`/`expired`/`temperature`/`other`), `photo_path`, `note`, `status` (blueprint §30.1 states), `reported_by`, `approved_by`. Damaged quantity sits in `stock_levels.damaged_milli` and is never sold. Created today by customer returns; the shelf/GRN/count flows and decisions come with the stock screens.
+
+#### `damage_decisions`
+Append-only. `damage_report_id` → `damage_reports`, `decision` (`supplier_return`/`reduced_sale`/`write_off`/`internal_use`), `qty_milli`, `markdown_price_cents`, `supplier_return_id`, `decided_by`. Partial decisions allowed (REQ-DMG-004).
+
+#### `sync_issues`
+`tenant_id`, `shop_id`, `lane_id`, `client_uuid` (unique per tenant), `payload` (the sale the lane tried to send), `error_code`, `error_message`, `status` (`open`/`resolved`/`discarded`), `resolved_by`, `resolution_note`. Offline sales the server refused when the lane synced them (WF-003); shown in Back office → Sync issues. Written by `api.report_sync_issue` and `api.resolve_sync_issue`.
+
+### 3.8 Catalogue and stock operations (20261023090300)
+
+#### `label_queue`
+`tenant_id`, `shop_id`, `item_id` → `items`, `reason` (`price_changed`/`new_item`/`promotion`/`reduced`/`manual`), `copies` (1–100), `old_price_cents` (the price before a change; for `reduced` it holds the reduced price), `printed_at`, `printed_by`. At most one unprinted row per shop and item (`label_queue_open`). Filled by triggers when a default-list price changes or an item joins a promotion, by `api.decide_damage` (reduced stock) and by `api.queue_labels` (manual); emptied by `api.update_labels(…, 'printed')`. Read: tenant + shop.
+
+#### `stock_counts`
+`tenant_id`, `shop_id`, `count_no` (`CNT-KDY1-000001`), `name` (the section), `department_id`, `status` (`counting` → `submitted` → `posted`, or `cancelled`), `created_by`, `submitted_by/at`, `posted_by/at`. Posting needs `shift.manage` (a manager) and writes one `count` movement per line that differs.
+
+#### `stock_count_lines`
+`count_id` → `stock_counts`, `item_id`, `system_milli` (the sellable quantity frozen when the count started), `counted_milli`, `counted_by`, `counted_at`. Unique `(count_id, item_id)`. The variance posted is `counted − system`, so sales during the count do not distort it.
+
+### 3.9 Purchasing (20261023090400)
+
+#### `purchase_orders`
+`tenant_id`, `shop_id`, `po_no` (`PO-KDY1-000001`), `supplier_id` → `suppliers`, `status` (`draft` → `sent` → `partially_received` → `received`, or `cancelled`), `expected_on`, `note`, `total_cents`, `created_by`, `sent_at`. Written by `api.save_po` / `api.po_action`; GRNs move the status on.
+
+#### `purchase_order_lines`
+`po_id` → `purchase_orders`, `item_id`, `qty_milli`, `unit_cost_cents`, `received_milli` (raised by posted GRNs against the PO). Unique `(po_id, item_id)`.
+
+#### `grns`
+Goods received note. `tenant_id`, `shop_id`, `grn_no` (`GRN-KDY1-000001`), `supplier_id`, `po_id` (optional), `supplier_invoice_no`, `received_on`, `status` (`draft`/`posted`), `subtotal_cents`, `discount_cents`, `total_cents` (payable), `paid_cents` (≤ total), `due_on` (received + supplier terms), `created_by`, `posted_by/at`. Written by `api.save_grn`.
+
+#### `grn_lines`
+`grn_id` → `grns`, `item_id`, `batch_no`, `expiry_on` (today … +10 years), `qty_milli` (paid units), `free_milli` (free issue), `unit_cost_cents`, `line_cents`.
+
+#### `stock_batches`
+`tenant_id`, `shop_id`, `item_id`, `batch_no`, `expiry_on`, `received_milli`, `unit_cost_cents`, `grn_line_id`. One row per posted GRN line. What is **left** of a batch is not stored: `api.expiry_list` infers it from current stock, oldest expiry sold first (FEFO, BR-031). Index `(shop_id, item_id, expiry_on)`.
+
+#### `supplier_ledger`
+Append-only. `supplier_id`, `kind` (`grn`/`payment`/`return`/`adjustment`), `ref_id`, `amount_cents` (+ we owe more, − we paid), `note`. `suppliers.balance_due_cents` is the cached sum, written in the same statement pair by `app.supplier_post` (blueprint §21.4 rule 1).
+
+#### `supplier_payments`
+`tenant_id`, `shop_id`, `payment_no` (`PAY-KDY1-000001`), `supplier_id`, `method` (`cash`/`bank_transfer`/`cheque`), `reference` (cheque / transfer no.), `cheque_date`, `amount_cents`, `status` (`pending_approval`/`paid`/`rejected`), `allocations` (requested split over GRNs, applied when paid), `created_by`, `decided_by/at`. Above `tenants.supplier_payment_approval_cents` (default Rs 50,000) a payment by anyone without `settings.manage` waits for the owner.
+
+#### `supplier_payment_allocations`
+Append-only. `(payment_id, grn_id)` PK, `amount_cents`. How a paid payment was split over GRNs; raises `grns.paid_cents`.
+
+### 3.10 Settings, people, credit and billing (20261023090600)
+
+#### `tax_rates`
+`tenant_id`, `tax_class`, `rate_bp`, `effective_from`; unique `(tenant_id, tax_class, effective_from)`. Effective-dated VAT (BR-060): a new rate is a new row, history is kept. Seeded for every tenant (standard 18 %, exempt 0, zero 0) and by trigger for new tenants. `app.tax_rate_bp(tenant, class, date)` returns the rate in force. Read: own tenant. Writes: `api.set_tax_rate` (`settings.manage`).
+
+#### `customer_ledger`
+Append-only. `tenant_id`, `customer_id` → `customers`, `kind` (`sale`/`payment`/`return`/`adjustment`), `ref_id` (sale, wholesale invoice or return), `amount_cents` (+ customer owes more, − paid/credited), `note`. `customers.balance_due_cents` is the cached sum, written together by `app.customer_post`. Existing balances became `adjustment` rows ("Opening balance"). Written by `api.create_sale` (on-account part), `api.save_wholesale` (credit invoice), `api.receive_customer_payment`, and a trigger on `returns` (credit-balance settlement).
+
+#### `saas_invoices`
+LaneOS's own bill to the tenant. `tenant_id`, `invoice_no` (unique), `plan_id`, `period_start`/`period_end`, `amount_cents`, `status` (`open`/`paid`/`void`), `due_on`, `paid_at`, `payhere_order_id`. Read: own tenant or platform admin. Writes: the platform billing job (PayHere integration, later).
+
+### 3.11 Wholesale (20261023090700)
+
+#### `wholesale_docs`
+`tenant_id`, `shop_id`, `kind` (`quotation`/`invoice`), `doc_no` (`QTN-KDY1-000001` / `WS-KDY1-000001`), `status` (`open`/`converted` for quotations, `issued`/`void` for invoices), `customer_id` (needed for a balance), buyer name / address / VAT no / phone (printed), `terms` (`cash`/`credit`/`cheque`), `credit_days`, `cheque_no`, `subtotal_cents`, `discount_cents` (sum of line discounts), `vat_cents`, `vat_included`, `total_cents`, `paid_cents`, `valid_until` (quotations, +14 days), `due_on` (credit), `from_quotation_id`, `note`. Read: tenant + shop. Writes: `api.save_wholesale` only.
+
+#### `wholesale_doc_lines`
+`doc_id` → `wholesale_docs`, `line_no`, `item_id`, `item_name`, `tax_class`, `pack_qty` + `unit_label` ("Case of 24"), `qty` (packs), `list_price_cents` / `price_cents` (per pack), `discount_bp`, `line_total_cents`, `unit_cost_cents`. An issued invoice posts a `sale` stock movement (`ref_type = 'wholesale'`) of `qty × pack_qty` units per line.
+
+### 3.12 Head office (20261023090900)
+
+#### `shop_prices`
+PK `(shop_id, item_id)`, `tenant_id`, `price_cents`, `updated_at`, `updated_by`. A shop's own price for an item (central pricing → overrides). The effective price is `coalesce(shop_prices.price_cents, default list price)` in **both** `api.lane_catalog` v4 and `api.create_sale` v5, so lane preview and server truth stay equal. Changes bump `catalog_version` and queue a shelf label at that shop. Read: own tenant. Writes: `api.set_shop_price` (`item.edit`) and scheduled changes.
+
+#### `price_schedules`
+`tenant_id`, `name`, `starts_at`, `status` (`scheduled`/`applied`/`cancelled`), `created_by`, `applied_at`, `cancelled_by`. A price change that starts at a set time (WF-007). Applied by `app.apply_due_price_schedules()`, run **every minute by pg_cron** (job `laneos-apply-price-schedules`) and also when the pricing page opens.
+
+#### `price_schedule_lines`
+`schedule_id` → `price_schedules`, `item_id`, `shop_id` (null = every shop, i.e. the default list; else that shop's override), `price_cents`, `old_cents` (filled when applied). Unique `(schedule_id, item_id, shop_id)` with nulls not distinct.
+
+#### `transfers`
+`tenant_id`, `transfer_no` (`TRF-<sending shop>-000001`), `from_shop_id`, `to_shop_id`, `status` (`requested` → `approved`/`rejected` → `in_transit` → `closed`, or `received_with_variance` → `closed`; `cancelled` before dispatch — WF-006), `note`, `variance_note`, who and when for request / approve / dispatch / receive / close. Read: tenant + either shop. Writes: `api.request_transfer`, `api.transfer_action`. Needs `tenant_entitlements.transfers`.
+
+#### `transfer_lines`
+`transfer_id` → `transfers`, `item_id`, `qty_requested_milli`, `qty_sent_milli`, `qty_received_milli`, `unit_cost_cents` (sending shop's average cost when requested). Dispatch posts `transfer_out` movements at the sending shop; receive posts `transfer_in` at the receiving shop. Stock that left and did not arrive stays a recorded variance (closing it needs a reason).
+
+### 3.13 Platform admin (20261023091000)
+
+#### `support_tickets`
+`tenant_id`, `ticket_no` (identity), `subject`, `priority` (`low`/`normal`/`high`/`urgent`), `status` (`open` = waiting for LaneOS, `pending` = waiting for the business, `resolved`, `closed`), `created_by`, `assigned_to`, `updated_at`. Read: own tenant or platform admin. Writes: `api.create_ticket`, `api.ticket_reply`.
+
+#### `ticket_messages`
+Append-only. `ticket_id` → `support_tickets`, `tenant_id`, `author_id`, `is_staff`, `body`.
+
+#### `support_sessions`
+`admin_id`, `tenant_id`, `reason`, `ticket_id`, `started_at`, `expires_at` (5–120 minutes), `ended_at`. A time-boxed, read-only support view ("impersonation"). Starting and ending one writes `support.view_start` / `support.view_end` into the **tenant's** `audit_log`. Read: platform admins, and the tenant's owners for their own business.
+
+**New columns (20261023090400):** `suppliers.contact_name`, `suppliers.vat_no`, `suppliers.daily_delivery`; `items.supplier_id` (preferred supplier, set by the first GRN if empty; `items.cost_cents` follows the latest GRN cost); `tenants.supplier_payment_approval_cents`. `stock_levels.avg_cost_cents` is now maintained by GRNs (weighted average; free issue lowers it).
+
+**New columns (20261023090300):** `items.brand`, `items.wholesale_cents`, `items.min_price_cents`; `barcodes.pack_qty` (case barcode: one scan = `pack_qty` units); `tenants.damage_approval_cents` (damage reports above this value need a second person; default Rs 10,000).
+
+**New columns on existing tables (20261023090000):** `tenants.credit_note_days`, `tenants.credit_note_any_shop`, `tenants.cash_refund_pin_cents` (cash refunds above this need a supervisor PIN; default Rs 5,000); `members.pin_failures`, `members.pin_locked_until`, `members.has_pin` (generated); `lanes.active_member_id`, `lanes.active_since` (the cashier who unlocked the lane with a PIN).
 
 ## 4. Security model
 
@@ -218,6 +358,10 @@ Append-only. `sale_id` → `sales`, `tenant_id`, `shop_id`, `method` (`cash`/`ca
 
 **Policy pattern.** Tenant tables: `tenant_id = (select app.tenant_id())`. Shop tables: the same plus `(select app.can_shop(shop_id))`. Writes to master data also require a permission. Financial tables have **no write policies** and INSERT/UPDATE/DELETE are revoked from `authenticated`. They are written only by `api.*` functions. `anon` has no rights on any table.
 
+**Hidden columns.** `members.pin_hash` and `lanes.key_hash` are not readable through the API (column-level grants, migration 20261023090100); use `members.has_pin` and `lanes.registered_at`. Any function that runs as the caller must name its columns instead of `select *` on these two tables.
+
+**Lane identity.** A lane registered with `api.register_lane` gets a random device key; only its SHA-256 is stored. The browser keeps the key in IndexedDB and sends it as `X-Lane-Key`; `api.create_sale` and `api.process_return` refuse a registered lane's requests without it. A cashier unlocks the lane with a PIN (`api.lane_unlock`, bcrypt, 5 failures → 15 minutes locked); their member id is then recorded on shifts, sales and returns from that lane.
+
 **JWT claims.** `public.custom_access_token_hook` (enabled in `supabase/config.toml`) adds `tenant_id`, `member_id`, `app_role`, `perms`, `shop_ids` and `perm_v` to every access token. The standard `role` claim is left alone because PostgREST uses it as the Postgres role (see migration 20261022090500).
 
 ## 5. Functions the app calls
@@ -230,12 +374,67 @@ All live in the `api` schema (exposed to the REST API). `anon` cannot execute th
 | `api.add_lane(shop, name)` | definer | Adds lane `L<n>` | `staff.manage` | `PLAN_LIMIT`, `NOT_FOUND` |
 | `api.upsert_item(p jsonb)` | definer | Item + barcode + default price in one transaction | `item.edit` | `DUPLICATE_BARCODE`, `ABOVE_MRP`, `DUPLICATE_PLU` |
 | `api.adjust_stock(shop, item, qty_milli, reason, note)` | definer | Opening stock, counts, corrections via the ledger | `stock.adjust` | `NOT_FOUND`, `VALIDATION_ERROR` |
-| `api.open_shift(lane, float)` | definer | Opens a shift on a lane | `sale.create` | `SHIFT_ALREADY_OPEN` |
-| `api.close_shift(shift, counted)` | definer | Closes it; returns expected, counted, variance | `sale.create` | `SHIFT_NOT_OPEN` |
-| `api.create_sale(p jsonb)` | definer | Re-prices the basket, checks payments, writes sale + lines + payments + stock movements | `sale.create` | `PRICE_MISMATCH`, `UNDERPAID`, `SHIFT_NOT_OPEN`, `ITEM_INACTIVE`, `ABOVE_MRP` |
+| `api.open_shift(lane, float, denoms, reserve)` | definer | Opens a shift with the float counted by note; optionally reserves 0–500 invoice numbers for offline use | `sale.create` | `SHIFT_ALREADY_OPEN` |
+| `api.shift_summary(shift)` | definer | Cash / card+QR / credit-note totals, cash refunds, pickups and expected cash | `sale.create` + shop | `NOT_FOUND` |
+| `api.close_shift(shift, counted, denoms, note)` | definer | Closes it (expected = float + cash − change − cash refunds − pickups), records variance note, signs the lane's cashier out | `sale.create` | `SHIFT_NOT_OPEN` |
+| `api.cash_pickup(shift, amount, note)` | definer | Records cash taken to the safe | `cash.pickup` | `SHIFT_NOT_OPEN` |
+| `api.create_sale(p jsonb)` (v3) | definer | Re-prices the basket, checks payments, lane key, credit notes (locked, hashed) and reserved invoice numbers; writes sale + lines + payments + stock movements + redemptions | `sale.create` | `PRICE_MISMATCH`, `UNDERPAID`, `SHIFT_NOT_OPEN`, `ITEM_INACTIVE`, `ABOVE_MRP`, `LANE_KEY_INVALID`, `CREDIT_NOTE_*` |
+| `api.check_credit_note(code, lane)` | definer | Balance, expiry and shop rule for a code; never returns the code | `sale.create` | `ok:false` + `CREDIT_NOTE_*` |
+| `api.find_sale_for_return(invoice)` | definer | The bill with each line's sold and already-returned quantity | `return.create` | `NOT_FOUND` |
+| `api.process_return(p jsonb)` | definer | Return lines (≤ what is left), restock or damaged bucket + damage report, settlement: cash (supervisor PIN above the tenant limit), original method, exchange / credit note (returns the code once), credit balance | `return.create` | `RETURN_QTY_EXCEEDED`, `NOT_RETURNABLE`, `CUSTOMER_REQUIRED`, `ok:false` + `SUPERVISOR_PIN_REQUIRED`/`PIN_INVALID` |
+| `api.extend_credit_note(note, days, reason)` / `api.cancel_credit_note(note, reason)` | definer | Owner actions on a credit note (audited) | `settings.manage` | `NOT_FOUND` |
+| `api.set_pin(member, pin)` | definer | Sets a PIN of `tenants.pin_length_min`–6 digits (bcrypt; since 20261023090800); rejects too-simple PINs | self or `staff.manage` | `VALIDATION_ERROR` |
+| `api.register_lane(lane)` | definer | Registers this device for the lane; returns the device key once (rotates any old key) | `staff.manage` | `NOT_FOUND` |
+| `api.lane_cashiers(lane)` | definer | Members with a PIN who may sell in the lane's shop | `sale.create` | `NOT_FOUND` |
+| `api.lane_unlock(lane, key, member, pin)` / `api.lane_lock(lane)` | definer | Checks key + PIN and sets the lane's active cashier / clears it | `sale.create` | `ok:false` + `LANE_KEY_INVALID`/`PIN_INVALID`/`PIN_LOCKED` |
+| `api.lane_add_customer(name, phone, consent)` / `api.set_marketing_consent(customer, consent)` | definer | Lane-side member sign-up and SMS consent | `sale.create` | `DUPLICATE_PHONE` |
+| `api.report_sync_issue(...)` / `api.resolve_sync_issue(issue, status, note)` | definer | Record a refused offline sale / close it | `sale.create` / `shift.manage` | `NOT_FOUND` |
+| `api.upsert_item(p jsonb)` (v2) | definer | Item + barcode set (`barcodes: [{code, packQty}]` replaces the set) + default price; brand, wholesale, minimum | `item.edit` | `DUPLICATE_BARCODE`, `ABOVE_MRP` |
+| `api.import_items(shop, rows)` | definer | Up to 500 rows; each in its own savepoint; matches by barcode then PLU; creates categories; opening stock for new items; returns `{created, updated, errors:[{row, column, value, problem}]}` | `item.edit` | per-row errors |
+| `api.save_promotion(p jsonb)` | definer | Promotion + its item set | `promotion.manage` | `VALIDATION_ERROR` |
+| `api.queue_labels(shop, items[])` / `api.update_labels(ids[], action, copies)` | definer | Add items to the label queue / mark printed, remove, set copies | `item.edit` | `VALIDATION_ERROR` |
+| `api.report_damage(shop, item, qty, reason, source, note)` | definer | Damage report: sellable → damaged; `awaiting_approval` above the tenant limit | `stock.adjust` | `NOT_FOUND` |
+| `api.approve_damage(report, approve)` | definer | Second person approves, or rejects (stock back to sellable) | `stock.adjust`, not the reporter | `FORBIDDEN` |
+| `api.decide_damage(report, decision, qty, markdown)` | definer | Partial decisions: supplier return, reduced sale (back to sellable + reduced label), write off, internal use | `stock.adjust` | `VALIDATION_ERROR` |
+| `api.start_count(shop, name, department)` / `api.record_count(line, qty)` / `api.count_action(count, submit\|reopen\|cancel\|post)` | definer | Stock count sheet; posting writes `count` movements for the variance | `stock.adjust`; post also `shift.manage` | `VALIDATION_ERROR` |
+| `api.po_suggestions(shop)` | invoker | Items at/below re-order level without an open PO: preferred supplier, case size, suggested quantity (to 2× re-order level, whole cases) | RLS | — |
+| `api.save_po(shop, p)` / `api.po_action(po, send\|cancel\|close)` | definer | Draft PO with lines; send, cancel, or close a part-received PO | `grn.post` | `VALIDATION_ERROR` |
+| `api.save_grn(shop, p, post)` | definer | Draft or post a GRN: stock movements (+paid +free), batches, weighted average cost, item cost and supplier, supplier ledger, PO received qty/status, due date | `grn.post` | `VALIDATION_ERROR` |
+| `api.pay_supplier(shop, p)` / `api.decide_supplier_payment(payment, approve)` | definer | Supplier payment split over GRNs; held for the owner above the limit / owner approves or rejects | `supplier.manage` / `settings.manage` | `VALIDATION_ERROR` |
+| `api.expiry_list(shop, days)` | invoker | Batches expiring within `days` (−1 = already expired) with the quantity left, inferred FEFO | RLS | — |
+| `api.queue_reduced_label(shop, item, price, copies)` | definer | Queues a reduced sticker with the markdown price | `item.edit` | `VALIDATION_ERROR` |
+| `api.update_tenant_settings(p jsonb)` | definer | Updates whitelisted tenant settings columns (one call per settings tab); audited | `settings.manage` | `VALIDATION_ERROR` |
+| `api.set_tax_rate(class, rate_bp, from)` / `api.save_price_rule(id, name, discount_bp, applies_to)` | definer | New effective-dated rate / price-list rule | `settings.manage` | `NOT_FOUND` |
+| `api.add_member(p)` / `api.update_member(p)` | definer | Add staff (PIN-only with a code, or an invited email) within the plan's staff seats / change role, shops, code, permission overrides, active. Access changes bump `perm_v` and end the person's sessions | `staff.manage` (owners only by `settings.manage`) | `PLAN_LIMIT`, `FORBIDDEN` |
+| `api.claim_invite()` | definer | Links an invited membership to the signed-in user with that email | signed in | — |
+| `api.list_sessions(user)` / `api.end_session(session)` / `api.member_status()` | definer | Signed-in devices (from `auth.sessions`) / end one / 2FA and last activity per member | self or `staff.manage` | `FORBIDDEN`, `NOT_FOUND` |
+| `api.reset_access(scope, id, reason)` | definer | Reset access for a user, lane, shop or the whole tenant: deletes their auth sessions, unlocks lanes, writes a `session_resets` marker | `staff.manage` (user, lane) / `settings.manage` (shop, tenant) | `VALIDATION_ERROR` |
+| `api.reset_marker()` | definer | Latest reset marker that applies to the caller | signed in | — |
+| `api.receive_customer_payment(customer, amount, method, ref)` / `api.customer_credit()` | definer / invoker | Customer pays (cash/bank/cheque) through the ledger / oldest unpaid on-account bill per customer | `customer.manage` / RLS | `VALIDATION_ERROR` |
+| `api.create_sale(p jsonb)` (v4) | definer | v3 + `account` payments for a named customer within the credit limit (posted to the customer ledger) | `sale.create` | v3 codes + `CUSTOMER_REQUIRED`, `CREDIT_LIMIT` |
+| `api.change_plan(plan)` | definer | Self-service plan change; refused if shops, lanes or staff exceed the new plan | `settings.manage` | `PLAN_LIMIT`, `VALIDATION_ERROR` |
+| `api.create_tenant(…, plan, details)` (v2) | definer | Sign-up with business details (reg. no, city, type, mobile) and a 14-day trial | signed in, not yet a member | `VALIDATION_ERROR` |
+| `api.update_profile(name, phone, language)` | definer | My profile | self | `NO_TENANT` |
+| `api.save_wholesale(shop, p)` | definer | Quotation or invoice: prices from item wholesale × pack (or overridden, not below the minimum price, not above MRP), line discounts, VAT from `tax_rates`; invoices take stock and put any balance on the customer's account | `sale.create`; invoices also `customer.manage` | `CREDIT_LIMIT`, `CUSTOMER_REQUIRED`, `UNDERPAID`, `ABOVE_MRP`, `ITEM_INACTIVE` |
+| `api.report(shop, kind, from, to)` | definer | Report tabs: `sales` (daily series, totals, by department), `margin`/`items` (per item), `stock` (value by department), `damage`, `credit_notes`, `tax` (by class with VAT). Up to 400 days; shop null = all the caller's shops | `reports.view` | `VALIDATION_ERROR` |
+| `api.audit_export(what, from, to)` | definer | Audit row for a CSV export | `reports.view` | — |
+| `api.add_shop(code, name, address, phone)` / `api.set_shop_active(shop, active)` | definer | New shop within `max_shops` (lane L1, label queue for every item) / close or reopen (not with open shifts, never the last shop) | `settings.manage` | `PLAN_LIMIT`, `VALIDATION_ERROR` |
+| `api.set_shop_price(shop, item, price \| null)` | definer | A shop's own price, or back to the central price; MRP rule; shelf label | `item.edit` + shop | `ABOVE_MRP`, `NOT_FOUND` |
+| `api.save_price_schedule(p)` / `api.cancel_price_schedule(id)` / `api.apply_due_price_schedules()` | definer | Scheduled central or per-shop price changes; apply due ones for the caller's tenant | `item.edit` | `ABOVE_MRP`, `VALIDATION_ERROR` |
+| `api.request_transfer(p)` / `api.transfer_action(id, approve\|reject\|dispatch\|receive\|close\|cancel, p)` | definer | WF-006: request (receiving shop), approve (manager), dispatch (sending shop, stock out), receive (receiving shop, stock in, variance), close a variance with a reason | `stock.adjust`; approve/close `transfer.approve` | `PLAN_LIMIT`, `FORBIDDEN`, `VALIDATION_ERROR` |
+| `api.chain_overview()` | definer | Per accessible shop: today's sales/bills (and yesterday at this time), lanes online, offline lanes with open shifts, stock value, low stock, sync issues, pending damage, last cash variance, last price push | `reports.view` | — |
+| `api.chain_report(from, to)` | definer | Per shop over a range: sales, bills, margin, returns, wholesale, damage value/reports/pending, wastage, daily series | `reports.view` | `VALIDATION_ERROR` |
+| `api.stock_across_shops(search, department, low_only)` | invoker | Items × accessible shops quantities (≤ 200 items) | RLS | — |
+| `api.lane_catalog(lane)` (v4) / `api.create_sale(p)` (v5) | | Same as before with the shop price rule | | |
+| `api.create_ticket(subject, body, priority)` / `api.ticket_reply(ticket, body, status)` | definer | Help & support tickets from both sides | tenant member / platform admin | `NOT_FOUND` |
+| `api.is_platform_admin()` | definer | Whether the caller is LaneOS staff | signed in | — |
+| `api.admin_overview()`, `api.admin_tenants(search, status)`, `api.admin_tenant(id)`, `api.admin_invoices(status)`, `api.admin_live()`, `api.admin_audit(tenant, action, before)`, `api.admin_security()` | definer | Platform admin reads (MRR, tenants with owner email and usage, invoices, live lanes and bills per minute, cross-tenant audit, admins and 2FA) | platform admin | `FORBIDDEN` |
+| `api.admin_update_tenant(id, p)`, `api.admin_save_plan(p)`, `api.admin_generate_invoices(period)`, `api.admin_set_invoice(id, status, ref)`, `api.admin_add_admin(email)`, `api.admin_remove_admin(user)`, `api.admin_reset_platform(reason)` | definer | Status / plan / entitlement overrides (audited in the tenant's log), plans, monthly SaaS invoices (idempotent per month), mark paid (a past-due tenant becomes active), staff list, sign everyone out | platform admin | `FORBIDDEN`, `VALIDATION_ERROR` |
+| `api.admin_start_support(tenant, reason, minutes)` / `api.admin_end_support(session)` / `api.admin_support_view(tenant)` | definer | Time-boxed read-only support view: settings, lanes, counts, open sync issues, last bills — no customer personal data | platform admin with an active session | `FORBIDDEN` |
+| `api.public_receipt(token)` | definer, **anon** | Digital receipt by token: shop, lines, totals, payment methods — no customer data | none (token) | returns null |
 | `api.dashboard(shop)` | invoker | Today's sales, bills, margin, by-hour, top items, stock alerts, lanes | RLS | `NOT_FOUND` |
 | `api.list_items(shop, search, filter, limit, offset)` | invoker | Inventory table with stock and status | RLS | — |
-| `api.lane_catalog(lane)` | invoker | Items, prices, barcodes, stock, promotions, open shift for a lane | RLS | `NOT_FOUND` |
+| `api.lane_catalog(lane)` (v2) | invoker | Items, prices, barcodes, stock, promotions, open shift (with reserved invoice range), lane registration and unlocked cashier | RLS | `NOT_FOUND` |
 
 **Pricing rules in `api.create_sale`** (same as `packages/pricing`; the integration test checks parity):
 - Lines with the same item are merged.
@@ -245,7 +444,9 @@ All live in the `api` schema (exposed to the REST API). `anon` cannot execute th
 - All rounding is half-up.
 - If the lane's `expectedTotalCents` differs from the server total, the sale is refused with `PRICE_MISMATCH`.
 
-Internal helpers (not callable by the app): `app.post_movement`, `app.bump_catalog_version`, `app.check_price_vs_mrp`, `app.create_default_price_list`, `app.touch_updated_at`, `app.protect_keys`, `app.append_only`, `app.div_round`, `app.uuid_v7`.
+Internal helpers (not callable by the app): `app.post_movement`, `app.bump_catalog_version`, `app.check_price_vs_mrp`, `app.create_default_price_list`, `app.touch_updated_at`, `app.protect_keys`, `app.append_only`, `app.div_round`, `app.uuid_v7`, `app.next_doc_no`, `app.check_pin`, `app.lane_key_ok`, `app.lane_member`, `app.issue_credit_note`, `app.new_credit_note_code`, `app.normalize_code`, `app.credit_note_hash`, `app.end_sessions`, `app.can_see_user`, `app.customer_post`, `app.customer_return_credit`, `app.default_tax_rates`, `app.tax_rate_bp`, `app.sale_line_cost`, `app.set_shop_price`, `app.apply_due_price_schedules` (pg_cron), `app.require_platform_admin`, `app.support_session_ok`, `app.tenant_mrr`, `app.tenant_can_sell` (trigger: a suspended or cancelled tenant cannot insert sales or wholesale documents → `TENANT_SUSPENDED`).
+
+**Default privileges.** Since 20261023090000, new functions in `api` and `app` are not executable by `PUBLIC`; each migration grants what it needs. `anon` has `USAGE` on `api` only so it can call `api.public_receipt`.
 
 ## 6. Conventions and deliberate deviations
 
@@ -255,10 +456,26 @@ Conventions follow blueprint §22.1. These differ from the blueprint for now and
 | --- | --- | --- |
 | `sales` partitioned by month | Plain table with BRIN index | Partition before go-live volumes (M5); ids are already uuid v7 |
 | `ITEM_UNIT` (case barcodes) | Not yet | Comes with GRN / pack sizes (M6) |
-| `PAYMENT` + `PAYMENT_ALLOCATION` | `sale_payments` | Allocation is needed for credit settlement (M4) |
-| `RETURN`, `REFUND`, `CREDIT_NOTE*`, `DAMAGE_*`, `GRN*`, `SUPPLIER/CUSTOMER_LEDGER`, batches, transfers | Not yet | Their milestones: M3, M4, M6, M7 |
+| `PAYMENT` + `PAYMENT_ALLOCATION` | `sale_payments`; customer payments are ledger rows | Payments settle the oldest on-account bills first (`api.customer_credit` infers which are unpaid) instead of explicit allocation rows |
+| `RETURN`, `CREDIT_NOTE*`, `DAMAGE_*` | Built (`returns`, `credit_notes`, `damage_reports`, …) | `REFUND` is not a separate table: a return settled in cash or to the original method is the refund |
+| `GRN*`, `SUPPLIER_LEDGER`, batches | Built (`grns`, `supplier_ledger`, `stock_batches`) | Batch quantity left is inferred FEFO, not decremented per sale |
+| `CUSTOMER_LEDGER` | Built (`customer_ledger`) | — |
+| Transfers | Built (`transfers`, `transfer_lines`) | A short delivery stays as a recorded variance; it is not moved to damage automatically |
+| Supplier returns | Not yet | M6 |
+| Price overrides per shop group / zone | Per shop (`shop_prices`) | Zones can be added as a layer between central and shop later |
+| Impersonation = acting as the tenant | Read-only support view through `api.admin_support_view` | Staff never get the tenant's permissions; everything is audited in the tenant's log |
+| PayHere webhook marks invoices paid | Staff mark payments in Admin → Billing | Until the merchant account exists |
+| Reset markers checked on every request (§27.5.5) | `api.reset_access` deletes the person's `auth.sessions`; the proxy's `getUser()` then fails for old tokens | Same effect without a per-request lookup; markers are still written for the audit trail |
+| Margin from FIFO cost layers | Average-cost snapshot per sale line | Simple and stable; GRNs keep the average current |
+| Tenant settings editable with UPDATE | Only through `api.update_tenant_settings` | One audited path with a column whitelist |
+| Wholesale prices per buyer group | `items.wholesale_cents` per item + per-line override; `price_lists.discount_bp` is recorded but not yet applied | Applying list rules comes with customer price groups |
+| Security settings §27.6 all enforced | Enforced: 2FA requirement (reminder banner), back-office idle sign-out, lane lock minutes, PIN minimum length, export owner-only. Stored only: failed-login lock, one session per person, login alerts, PIN change days, credit-note cash-out | The stored-only ones are shown disabled with a "Later" badge |
 | `TERMINAL` | `lanes` | Same thing; "lane" is the word used in the UI and routes |
-| Lane delta sync `catalog_delta(since)` | `lane_catalog` returns the whole catalogue | Delta sync comes with the offline lane (M3) |
+| Lane delta sync `catalog_delta(since)` | `lane_catalog` returns the whole catalogue | Delta sync and a service worker (offline reload) come later; today a lane keeps selling offline while the page stays open |
+| PIN hash Argon2id | bcrypt (`pgcrypto` `crypt`, cost 10) | Postgres cannot compute Argon2id; bcrypt + 5-failure lockout + hidden column |
+| Refund approval queue (Figma 1-2808 "Approval needed") | Supervisor PIN at the lane, synchronous | No refund is ever left pending; `returns.approved_by` records who approved |
+| Credit-note lookup rate limit (10/min, lock after 5 failures, §30.3) | Not yet | Comes with the rate-limit task; codes are 60-bit random so guessing is still impractical |
+| Damage stock movement types (`to_damaged`, …) | Damaged qty kept in `stock_levels.damaged_milli` + `damage_reports`, not in `stock_movements` | Keeps the ledger = sellable stock rule simple; decisions will move qty between buckets |
 | Back-office paging by cursor | Offset in `list_items` | Fine for back-office tables; lanes will use deltas |
 
 ## 7. Migration log
@@ -272,6 +489,18 @@ Conventions follow blueprint §22.1. These differ from the blueprint for now and
 | `20261022090400_read_functions.sql` | `api.dashboard`, `api.list_items`, `api.lane_catalog` |
 | `20261022090500_fix_hook_role_claim.sql` | Access token hook writes `app_role` instead of overwriting `role` |
 | `20261022090600_fix_create_sale_safeupdate.sql` | `api.create_sale` uses `truncate` / `where true` on its temp table: Supabase's `pg-safeupdate` rejects DELETE/UPDATE without WHERE. Rule for all new functions: always write a WHERE clause |
+| `20261023090000_lane_operations.sql` | `doc_counters`, `cash_pickups`, `damage_reports`, `damage_decisions`, `returns`, `return_lines`, `credit_notes`, `credit_note_redemptions`, `sync_issues`; new columns on `tenants`, `members`, `lanes`, `shifts`, `sales`; Vault key for credit-note codes; PIN + lane registration functions; shifts v2 (denominations, pickups, reserved invoice numbers); `api.create_sale` v3; returns and credit notes; sync issues; `api.public_receipt`; `api.lane_catalog` v2; default privileges |
+| `20261023090100_hide_secret_columns.sql` | Hides `members.pin_hash` and `lanes.key_hash` from the API; adds `members.has_pin`; `lanes` update limited to `name`, `status` |
+| `20261023090200_fix_lane_catalog_columns.sql` | `api.lane_catalog` reads named columns (it used `lanes.*`, which the previous migration made unreadable) |
+| `20261023090400_purchasing.sql` | `purchase_orders`, `purchase_order_lines`, `grns`, `grn_lines`, `stock_batches`, `supplier_ledger`, `supplier_payments`, `supplier_payment_allocations`; supplier contact/VAT/daily delivery, item preferred supplier, payment approval limit; PO, GRN, payment and expiry functions |
+| `20261023090500_expiry_markdown.sql` | `api.queue_reduced_label` (reduced stickers from the expiry screen) |
+| `20261023090300_catalogue_stock_ops.sql` | `label_queue`, `stock_counts`, `stock_count_lines`; item brand/wholesale/minimum, case barcodes, damage approval limit; `api.upsert_item` v2, `api.import_items`, `api.save_promotion`, label queue triggers and functions, damage report/approve/decide, stock counts, `api.lane_catalog` v3 (`packBarcodes`) |
+| `20261023090600_settings_people_billing.sql` | Tenant settings columns; `lanes.printer_name`; `tax_rates`; price-list rules; plans as designed + `plans.max_staff` etc.; member staff codes, permission overrides, invites; token hook + `app.permissions()` with overrides; add/update member, sessions, reset access, member status; `payment_method` `account`; `customer_ledger` + payments + `api.create_sale` v4; `saas_invoices`; `api.change_plan`; `api.create_tenant` v2 |
+| `20261023090700_profile_wholesale_reports.sql` | `api.update_profile`; customer balances only via the ledger; `sale_lines.unit_cost_cents` + trigger; `wholesale_docs`, `wholesale_doc_lines`, `api.save_wholesale`; `api.report` |
+| `20261023090800_export_audit_pin_length.sql` | `api.audit_export`; `api.set_pin` honours `tenants.pin_length_min` |
+| `20261023090900_chain_head_office.sql` | `api.add_shop`, `api.set_shop_active`; `shop_prices` + `api.set_shop_price`; `price_schedules`, `price_schedule_lines`, scheduled apply (pg_cron every minute); `transfers`, `transfer_lines`, `api.request_transfer`, `api.transfer_action`; `api.chain_overview`, `api.chain_report`, `api.stock_across_shops`; `api.create_sale` v5 and `api.lane_catalog` v4 with the shop price rule |
+| `20261023091000_platform_admin.sql` | `support_tickets`, `ticket_messages`, `support_sessions`; tickets, support view and all `api.admin_*` functions; `api.is_platform_admin` |
+| `20261023091100_billing_fixes.sql` | `api.admin_generate_invoices` numbers only new invoices (re-runs were able to reuse numbers); suspended/cancelled tenants cannot record sales or wholesale documents |
 
 ## 8. How to change the database
 

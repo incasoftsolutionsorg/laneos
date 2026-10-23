@@ -42,7 +42,7 @@ beforeAll(async () => {
     if (error) throw error;
   }
 
-  const { data: lane } = await owner.from('lanes').select('id, shop_id').eq('code', 'L1').single();
+  const { data: lane } = await owner.from('lanes').select('id, shop_id, shop:shops!inner(code)').eq('code', 'L1').eq('shop.code', 'KDY1').single();
   laneId = lane!.id;
   shopId = lane!.shop_id;
   await owner.schema('api').rpc('open_shift', { p_lane: laneId, p_opening_float_cents: 500000 }); // ok if already open

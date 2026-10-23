@@ -1,7 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import type { Json } from '@laneos/db-types';
 import { createClient } from '@/lib/supabase/server';
 
-interface PendingTenant { businessName: string; shopName: string; shopCode: string; ownerName: string }
+interface PendingTenant {
+  businessName: string; shopName: string; shopCode: string; ownerName: string;
+  plan?: string; details?: Record<string, string | null | undefined>;
+}
 
 const slugify = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30) || 'shop';
@@ -30,6 +34,8 @@ export async function GET(request: NextRequest) {
         p_shop_code: pending.shopCode,
         p_shop_name: pending.shopName,
         p_owner_name: pending.ownerName,
+        p_plan: pending.plan ?? 'single',
+        p_details: (pending.details ?? {}) as Json,
       });
       await supabase.auth.updateUser({ data: { pending_tenant: null } });
       await supabase.auth.refreshSession(); // the new token carries the tenant claims

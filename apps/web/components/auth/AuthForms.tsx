@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { useActionState, useState } from 'react';
-import { Alert, Button, Field, Input, buttonClass } from '@laneos/ui';
+import { Alert, Button, Field, Input, Select, buttonClass, cn } from '@laneos/ui';
+import { CITIES, SIGNUP_PLANS } from '@/lib/plans';
 import { register, requestReset, signIn, updatePassword, type FormState } from '@/app/(auth)/actions';
 
 const initial: FormState = {};
@@ -78,8 +79,10 @@ export function LoginForm({ next, reason }: { next?: string; reason?: string }) 
   );
 }
 
+/** Sign-up (Figma 1-90): shop details, plan, owner account in one form. */
 export function RegisterForm() {
   const [state, action, pending] = useActionState(register, initial);
+  const [plan, setPlan] = useState('single');
   if (state.message) {
     return (
       <div className="flex flex-col gap-4">
@@ -91,43 +94,56 @@ export function RegisterForm() {
   }
   return (
     <form action={action} className="flex flex-col gap-4">
-      <Heading title="Create your shop" subtitle="Start on the single-shop plan. You can add lanes and shops later." />
+      <h1 className="text-[26px] font-bold text-text">Create your shop account</h1>
       {state.error ? <Alert>{state.error}</Alert> : null}
-      <Field label="Your name">
-        <Input name="ownerName" required maxLength={100} autoComplete="name" />
-      </Field>
-      <Field label="Email">
-        <Input name="email" type="email" required maxLength={254} autoComplete="email" />
-      </Field>
-      <Field label="Password" hint="At least 10 characters">
-        <PasswordInput autoComplete="new-password" minLength={10} />
-      </Field>
-      <Field label="Business name">
-        <Input name="businessName" required maxLength={120} placeholder="ABC Supermarket" />
-      </Field>
-      <div className="grid grid-cols-[1fr_120px] gap-3">
-        <Field label="First shop">
-          <Input name="shopName" required maxLength={80} placeholder="Kandy" />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Shop name"><Input name="businessName" required maxLength={120} placeholder="ABC Supermarket" /></Field>
+        <Field label="Business registration no."><Input name="businessRegNo" maxLength={40} placeholder="PV 00123456" /></Field>
+        <Field label="Owner name"><Input name="ownerName" required maxLength={80} autoComplete="name" /></Field>
+        <Field label="Mobile"><Input name="mobile" required inputMode="tel" autoComplete="tel" placeholder="077 123 4567" /></Field>
+        <Field label="Email"><Input name="email" type="email" required maxLength={254} autoComplete="email" /></Field>
+        <Field label="Password" hint="At least 10 characters"><PasswordInput autoComplete="new-password" minLength={10} /></Field>
+        <Field label="City">
+          <Select name="city" defaultValue="Kandy">{CITIES.map((c) => <option key={c}>{c}</option>)}</Select>
         </Field>
-        <Field label="Shop code">
-          <Input
-            name="shopCode"
-            required
-            minLength={2}
-            maxLength={8}
-            pattern="[A-Za-z0-9]{2,8}"
-            title="2 to 8 letters or digits"
-            autoCapitalize="characters"
-            placeholder="KDY1"
-            className="uppercase"
-          />
+        <Field label="Business type">
+          <Select name="businessType" defaultValue="supermarket">
+            <option value="grocery">Grocery / kade</option><option value="supermarket">Supermarket</option>
+            <option value="pharmacy">Pharmacy</option><option value="hardware">Hardware</option><option value="other">Other</option>
+          </Select>
+        </Field>
+        <Field label="First shop (branch) name"><Input name="shopName" required maxLength={80} placeholder="Kandy" /></Field>
+        <Field label="Shop code" hint="Printed on invoice numbers">
+          <Input name="shopCode" required minLength={2} maxLength={8} pattern="[A-Za-z0-9]{2,8}" title="2 to 8 letters or digits" autoCapitalize="characters" placeholder="KDY1" className="uppercase" />
         </Field>
       </div>
-      <Button type="submit" disabled={pending} className="w-full">{pending ? 'Creating…' : 'Create account'}</Button>
-      <p className="flex gap-1.5 text-[13px]">
-        <span className="text-text-muted">Already have an account?</span>
-        <Link href="/login" className="font-semibold text-brand-primary">Sign in</Link>
-      </p>
+      <p className="text-[13px] font-semibold">Choose a plan</p>
+      <input type="hidden" name="plan" value={plan} />
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4" role="radiogroup" aria-label="Plan">
+        {SIGNUP_PLANS.map((p) => {
+          const contact = 'contact' in p;
+          const on = plan === p.id;
+          const body = (
+            <>
+              <span className="flex items-center justify-between text-[13px] font-semibold">{p.name}{on ? <span className="text-[11px] text-brand-primary">Selected</span> : null}</span>
+              <span className="mt-auto text-[16px] font-bold text-brand-primary">{p.price}</span>
+              <span className="text-[11px] text-text-muted">{p.text}</span>
+            </>
+          );
+          const cls = cn('flex min-h-32 flex-col gap-1 rounded-card border p-3 text-left', on ? 'border-brand-primary bg-brand-light' : 'border-border bg-surface hover:border-border-strong');
+          return contact
+            ? <a key={p.id} href="mailto:sales@laneos.lk?subject=Chain%20plan" className={cls}>{body}</a>
+            : <button key={p.id} type="button" role="radio" aria-checked={on} onClick={() => setPlan(p.id)} className={cls}>{body}</button>;
+        })}
+      </div>
+      <label className="flex items-center gap-2 text-[13px]">
+        <input type="checkbox" name="agree" required className="size-4 accent-brand-primary" />
+        I agree to the Terms and the Data Processing Agreement
+      </label>
+      <div className="flex items-center justify-between gap-3">
+        <Link href="/login" className={buttonClass('secondary')}>Back</Link>
+        <Button type="submit" disabled={pending}>{pending ? 'Creating…' : 'Start free trial'}</Button>
+      </div>
     </form>
   );
 }

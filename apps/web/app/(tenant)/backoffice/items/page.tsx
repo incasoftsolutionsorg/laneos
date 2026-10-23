@@ -57,7 +57,14 @@ export default async function InventoryPage({
       <PageHeader
         title="Inventory"
         subtitle={`${total.toLocaleString('en-US')} ${filter === 'all' ? 'items' : 'matching items'} · ${ctx.shop.name}`}
-        actions={canEdit ? <Link href="/backoffice/items/new" className={buttonClass('primary')}>+ Add item</Link> : null}
+        actions={canEdit ? (
+          <div className="flex gap-3">
+            <Link href="/backoffice/labels" className={buttonClass('secondary')}>Labels</Link>
+            <Link href="/backoffice/stock/counts" className={buttonClass('secondary')}>Stock count</Link>
+            <Link href="/backoffice/items/import" className={buttonClass('secondary')}>Import CSV</Link>
+            <Link href="/backoffice/items/new" className={buttonClass('primary')}>+ Add item</Link>
+          </div>
+        ) : null}
       />
 
       <div className="flex flex-wrap items-center gap-2.5">
