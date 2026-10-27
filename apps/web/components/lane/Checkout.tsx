@@ -83,8 +83,9 @@ export function Checkout({ catalog, cashier, cashierRole, receipt, lockMinutes =
   }, [laneId]);
 
   const totals = useMemo(
-    () => priceBasket(toBasket(cart, index), promotions, { roundingUnitCents: catalog.tenant.roundingUnitCents }),
-    [cart, index, promotions, catalog.tenant.roundingUnitCents],
+    // Members-only promotions count once a loyalty member is attached (same rule as api.create_sale).
+    () => priceBasket(toBasket(cart, index), promotions, { roundingUnitCents: catalog.tenant.roundingUnitCents, member: !!customer }),
+    [cart, index, promotions, catalog.tenant.roundingUnitCents, customer],
   );
   const pricedById = useMemo(() => new Map(totals.lines.map((l) => [l.itemId, l])), [totals.lines]);
 
@@ -242,7 +243,8 @@ export function Checkout({ catalog, cashier, cashierRole, receipt, lockMinutes =
   const submit = async (tenders: Tender[], print: boolean): Promise<string | null> => {
     const reserved = nextReserved();
     const invoiceNo = reserved != null ? `${catalog.shop.code}-${catalog.lane.code}-${pad6(reserved)}` : undefined;
-    const hasNote = tenders.some((t) => t.method === 'credit_note');
+    // Credit notes and points are checked against the server, so they cannot be queued offline.
+    const hasNote = tenders.some((t) => t.method === 'credit_note' || t.method === 'loyalty');
     const payload = {
       clientUuid,
       laneId,
@@ -254,8 +256,11 @@ export function Checkout({ catalog, cashier, cashierRole, receipt, lockMinutes =
     };
     const paid = tenders.reduce((s, t) => s + t.amountCents, 0);
 
-    const finish = (no: string, offline: boolean, token?: string, changeCents = paid - totals.totalCents) => {
+    const finish = (no: string, offline: boolean, token?: string, changeCents = paid - totals.totalCents, points?: { earned: number; redeemed: number }) => {
       const receipt = buildReceipt(no, tenders, changeCents, offline, token);
+      if (points && customer && (points.earned || points.redeemed)) {
+        receipt.loyalty = { ...points, balance: Math.max(0, customer.loyaltyPoints - points.redeemed + points.earned) };
+      }
       if (print) printJob({ kind: 'receipt', receipt });
       setPending(null);
       setDone({ invoiceNo: no, totalCents: totals.totalCents, changeCents, offline, receipt });
@@ -274,7 +279,8 @@ export function Checkout({ catalog, cashier, cashierRole, receipt, lockMinutes =
     const r = await postSale(payload, laneKey);
     if (r.kind === 'ok') {
       consumeReserved(reserved);
-      return finish(r.data.invoiceNo, false, r.data.receiptToken, r.data.changeCents);
+      return finish(r.data.invoiceNo, false, r.data.receiptToken, r.data.changeCents,
+        { earned: r.data.pointsEarned ?? 0, redeemed: r.data.pointsRedeemed ?? 0 });
     }
     if (r.kind === 'network') return queue();
     if (r.code === 'PRICE_MISMATCH') router.refresh();
@@ -506,6 +512,7 @@ export function Checkout({ catalog, cashier, cashierRole, receipt, lockMinutes =
           initialMode={pending.mode}
           appliedNote={appliedNote}
           customer={customer}
+          loyalty={catalog.tenant.loyalty}
           onClose={() => setPending(null)}
           submit={submit}
         />

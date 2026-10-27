@@ -26,11 +26,15 @@ export function Row({ label, value, bold, big }: { label: React.ReactNode; value
   );
 }
 
-export function ShopHeader({ name, lines, logo = true }: { name: string; lines: (string | null | undefined)[]; logo?: boolean }) {
+/** Shop name and address with the logo on the left; the logo prints in black and white (thermal printers). */
+export function ShopHeader({ name, lines, logo = true, logoUrl }: { name: string; lines: (string | null | undefined)[]; logo?: boolean; logoUrl?: string | null }) {
   const initials = name.split(/\s+/).map((w) => w[0]).join('').slice(0, 3).toUpperCase();
   return (
     <header className="flex items-start gap-3">
-      {logo ? <span className="flex size-[52px] shrink-0 items-center justify-center rounded-md bg-black text-[15px] font-bold text-white">{initials}</span> : null}
+      {logo && logoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={logoUrl} alt="" className="size-[52px] shrink-0 object-contain grayscale contrast-200" />
+      ) : logo ? <span className="flex size-[52px] shrink-0 items-center justify-center rounded-md bg-black text-[15px] font-bold text-white">{initials}</span> : null}
       <div className={`flex-1 ${logo ? 'text-right' : 'text-center'}`}>
         <p className="text-[12px] font-bold uppercase">{name}</p>
         {lines.filter(Boolean).map((l) => <p key={l}>{l}</p>)}

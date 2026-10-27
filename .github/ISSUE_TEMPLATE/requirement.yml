@@ -1,0 +1,31 @@
+name: Requirement
+description: A new or changed system behaviour
+title: "REQ-<AREA>-<NNN>: "
+labels: ["type:requirement"]
+body:
+  - type: input
+    id: reqid
+    attributes: { label: Requirement ID, placeholder: "REQ-SAL-004" }
+    validations: { required: true }
+  - type: textarea
+    id: story
+    attributes: { label: User story, placeholder: "As a <role>, I want <capability>, so that <benefit>." }
+    validations: { required: true }
+  - type: textarea
+    id: ac
+    attributes: { label: Acceptance criteria (Given / When / Then) }
+    validations: { required: true }
+  - type: input
+    id: links
+    attributes: { label: "Capability / slice / business rules / NFRs", placeholder: "CAP-005, SLICE-003, BR-010, NFR-PERF-001" }
+  - type: dropdown
+    id: moscow
+    attributes: { label: Priority, options: [Must, Should, Could, "Won't (this release)"] }
+    validations: { required: true }
+  - type: textarea
+    id: data
+    attributes: { label: Data and API impact (tables, functions, error codes) }
+  - type: textarea
+    id: security
+    attributes: { label: Security / privacy impact, placeholder: "none / describe" }
+    validations: { required: true }

@@ -22,14 +22,14 @@ function sample(base: { tenant: string; shop: ReceiptData['shop'] }, s: ReceiptD
   };
 }
 
-export function ReceiptPreview({ base }: { base: { tenant: string; shop: ReceiptData['shop'] } }) {
+export function ReceiptPreview({ base, logoUrl }: { base: { tenant: string; shop: ReceiptData['shop'] }; logoUrl?: string | null }) {
   const [paper] = useDraft<string>('receipt_paper');
   const [header] = useDraft<string | null>('receipt_header');
   const [footer] = useDraft<string>('receipt_footer');
   const [logo] = useDraft<boolean>('receipt_print_logo');
   const [vatReg] = useDraft<boolean>('vat_registered');
   const [vatNo] = useDraft<string | null>('vat_no');
-  const r = sample(base, { paper: paper === 'a4' ? '80mm' : paper, header, footer, logo, vatNo: vatReg ? vatNo : null });
+  const r = sample(base, { paper: paper === 'a4' ? '80mm' : paper, header, footer, logo, vatNo: vatReg ? vatNo : null, logoUrl });
   return (
     <div className="flex flex-col gap-3 xl:w-[330px] xl:shrink-0">
       <Button variant="secondary" onClick={() => printJob({ kind: 'receipt', receipt: r })}>Test print</Button>

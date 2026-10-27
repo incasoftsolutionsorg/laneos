@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { cents, uuid } from './common';
 
-export const PAYMENT_METHODS = ['cash', 'card', 'lankaqr', 'credit_note', 'account'] as const;
+export const PAYMENT_METHODS = ['cash', 'card', 'lankaqr', 'credit_note', 'account', 'loyalty'] as const;
 
 export const SaleLineInput = z
   .object({

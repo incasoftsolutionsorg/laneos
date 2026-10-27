@@ -26,19 +26,23 @@ export function A4({ children, autoPrint = false }: { children: React.ReactNode;
 }
 
 export function A4Header({
-  tenant, shop, title, meta, vatNo,
+  tenant, shop, title, meta, vatNo, logoUrl,
 }: {
   tenant: string; shop: { name: string; address?: string | null; phone?: string | null }; title: string;
-  meta: [string, string][]; vatNo?: string | null;
+  meta: [string, string][]; vatNo?: string | null; logoUrl?: string | null;
 }) {
   return (
     <header className="flex items-start justify-between gap-6 border-b-2 border-black pb-4">
+      <div className="flex items-start gap-4">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {logoUrl ? <img src={logoUrl} alt="" className="size-16 object-contain" /> : null}
       <div>
         <p className="text-[18px] font-bold">{tenant}</p>
         <p>{shop.name}</p>
         {shop.address ? <p>{shop.address}</p> : null}
         {shop.phone ? <p>Tel {shop.phone.replace(/^\+94(\d{2})(\d{3})(\d{4})$/, '0$1 $2 $3')}</p> : null}
         {vatNo ? <p>VAT reg. no {vatNo}</p> : null}
+      </div>
       </div>
       <div className="text-right">
         <p className="text-[20px] font-bold uppercase tracking-wide">{title}</p>

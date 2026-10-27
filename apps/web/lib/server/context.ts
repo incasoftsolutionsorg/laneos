@@ -33,7 +33,7 @@ export const getContext = cache(async () => {
   if (!member) return { supabase, userId, email, member: null } as const;
 
   const [{ data: tenant }, { data: allShops }, { data: memberShops }] = await Promise.all([
-    supabase.from('tenants').select('id, name, plan_id, status, rounding_unit_cents, brand_color, theme, auto_seasonal_theme, idle_timeout_min, require_2fa, entitlements:tenant_entitlements(max_shops, transfers, head_office)').eq('id', member.tenant_id).single(),
+    supabase.from('tenants').select('id, name, plan_id, status, rounding_unit_cents, brand_color, theme, auto_seasonal_theme, idle_timeout_min, require_2fa, logo_path, entitlements:tenant_entitlements(max_shops, transfers, head_office)').eq('id', member.tenant_id).single(),
     // Oldest first: with no shop chosen yet, the business's first shop is the default.
     supabase.from('shops').select('id, code, name').eq('is_active', true).order('created_at'),
     supabase.from('member_shops').select('shop_id').eq('member_id', member.id),

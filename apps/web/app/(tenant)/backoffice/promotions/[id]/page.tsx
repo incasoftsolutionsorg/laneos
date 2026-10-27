@@ -22,6 +22,8 @@ export default async function EditPromotionPage({ params }: { params: Promise<{ 
         values={{
           id: p.id, name: p.name, kind: p.kind, buyQty: String(p.buy_qty ?? ''), percent: p.percent_bp ? String(p.percent_bp / 100) : '',
           bundlePrice: p.bundle_price_cents != null ? (p.bundle_price_cents / 100).toFixed(2) : '',
+          threshold: p.threshold_cents != null ? String(p.threshold_cents / 100) : '', discount: p.discount_cents != null ? String(p.discount_cents / 100) : '',
+          membersOnly: p.members_only,
           startsOn: day(p.starts_at), endsOn: day(p.ends_at), isActive: p.is_active, itemIds: p.promotion_items.map((x) => x.item_id),
         }}
       />

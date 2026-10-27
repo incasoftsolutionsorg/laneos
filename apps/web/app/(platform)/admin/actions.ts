@@ -40,6 +40,7 @@ export async function generateInvoices(period: string) {
   const { data, error } = await supabase.schema('api').rpc('admin_generate_invoices', { p_period: `${period}-01` });
   if (error) return { error: clean(error.message) };
   revalidatePath('/admin/billing');
+  if (!data) return { ok: `No new invoices for ${period}: every paying tenant already has one, and tenants whose free trial runs past the month are not billed.` };
   return { ok: `${data} invoice(s) created for ${period}.` };
 }
 

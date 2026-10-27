@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Avatar, Button, Logo, cn } from '@laneos/ui';
-import { registerLane, unlockLane } from '@/app/(lane)/lane/actions';
+import { changeLanePin, registerLane, unlockLane } from '@/app/(lane)/lane/actions';
 import { getLaneKey, rememberLane, setLaneKey } from '@/lib/lane/device';
 
 interface Cashier { id: string; name: string; locked: boolean }
@@ -21,6 +21,10 @@ export function PinScreen({
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // PIN change when the tenant's interval has passed: old PIN kept in memory only until the change is sent.
+  const [stage, setStage] = useState<'pin' | 'new' | 'confirm'>('pin');
+  const [oldPin, setOldPin] = useState('');
+  const [newPin, setNewPin] = useState('');
 
   useEffect(() => {
     rememberLane(laneId);
@@ -30,13 +34,23 @@ export function PinScreen({
   const submit = useCallback(async () => {
     if (!who) return setError('Choose who is selling first.');
     if (pin.length < 4) return setError('Enter your 4–6 digit PIN.');
+    if (stage === 'new') { setNewPin(pin); setPin(''); setStage('confirm'); return; }
     setBusy(true);
+    if (stage === 'confirm') {
+      if (pin !== newPin) { setBusy(false); setPin(''); setStage('new'); return setError('The two new PINs do not match. Type the new PIN again.'); }
+      const c = await changeLanePin(laneId, key ?? null, who, oldPin, newPin);
+      setBusy(false); setPin('');
+      if (c.ok) { setOldPin(''); setNewPin(''); router.replace(`/lane/${laneId}`); return; }
+      setStage('new');
+      return setError(c.error ?? 'Could not change the PIN.');
+    }
     const r = await unlockLane(laneId, key ?? null, who, pin);
     setBusy(false);
+    if (r.code === 'PIN_EXPIRED') { setOldPin(pin); setPin(''); setStage('new'); return; }
     setPin('');
     if (r.ok) router.replace(`/lane/${laneId}`);
     else setError(r.error ?? 'Could not unlock.');
-  }, [key, laneId, pin, router, who]);
+  }, [key, laneId, newPin, oldPin, pin, router, stage, who]);
 
   const press = useCallback((k: (typeof KEYS)[number]) => {
     setError(null);
@@ -98,7 +112,7 @@ export function PinScreen({
           </div>
         ) : (
           <>
-            <h1 className="text-[22px] font-bold">Who is selling?</h1>
+            <h1 className="text-[22px] font-bold">{stage === 'pin' ? 'Who is selling?' : 'Choose a new PIN'}</h1>
             {cashiers.length === 0 ? (
               <Alert tone="warning">Nobody has a PIN for this shop yet. Set PINs in Users &amp; roles.</Alert>
             ) : (
@@ -110,7 +124,7 @@ export function PinScreen({
                     role="radio"
                     aria-checked={who === c.id}
                     disabled={c.locked}
-                    onClick={() => { setWho(c.id); setError(null); }}
+                    onClick={() => { setWho(c.id); setError(null); setStage('pin'); setPin(''); setOldPin(''); setNewPin(''); }}
                     className={cn('flex w-[76px] flex-col items-center gap-1.5 rounded-card border p-2.5 disabled:opacity-40',
                       who === c.id ? 'border-brand-primary bg-brand-light' : 'border-border bg-surface hover:border-brand-primary')}
                     title={c.locked ? 'Locked for 15 minutes after wrong PINs' : undefined}
@@ -121,7 +135,9 @@ export function PinScreen({
                 ))}
               </div>
             )}
-            <p className="text-[13px] text-text-muted">Enter your 4–6 digit PIN</p>
+            <p className="text-[13px] text-text-muted">
+              {stage === 'pin' ? 'Enter your 4–6 digit PIN' : stage === 'new' ? 'Your PIN is due for a change. Type a new 4–6 digit PIN.' : 'Type the new PIN again'}
+            </p>
             <div className="flex gap-[13px]" aria-label={`${pin.length} digits entered`}>
               {Array.from({ length: 6 }, (_, i) => (
                 <span key={i} className={cn('size-3.5 rounded-full', i < pin.length ? 'bg-brand-primary' : 'bg-border-strong')} />

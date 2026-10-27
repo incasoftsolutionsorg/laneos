@@ -5,6 +5,7 @@ import { LaneBar } from '@/components/lane/LaneBar';
 import { OpenShiftCard } from '@/components/lane/ShiftPanels';
 import type { LaneCatalog } from '@/lib/lane/cart';
 import { requireTenant } from '@/lib/server/context';
+import { publicUrl } from '@/lib/storage';
 
 export const metadata: Metadata = { title: 'Checkout' };
 
@@ -33,7 +34,7 @@ export default async function LanePage({ params }: { params: Promise<{ laneId: s
     ctx.supabase.from('shops').select('address, phone').eq('id', catalog.shop.id).single(),
   ]);
   const receipt = t ? {
-    settings: { paper: t.receipt_paper, header: t.receipt_header, footer: t.receipt_footer, logo: t.receipt_print_logo, vatNo: t.vat_registered ? t.vat_no : null },
+    settings: { paper: t.receipt_paper, header: t.receipt_header, footer: t.receipt_footer, logo: t.receipt_print_logo, vatNo: t.vat_registered ? t.vat_no : null, logoUrl: publicUrl(ctx.tenant.logo_path) },
     address: shop?.address ?? null,
     phone: shop?.phone ? shop.phone.replace(/^\+94(\d{2})(\d{3})(\d{4})$/, '0$1 $2 $3') : null,
   } : undefined;

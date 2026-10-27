@@ -130,7 +130,11 @@ describe('damage (blueprint §30.1)', () => {
     const { data: t } = await owner.from('tenants').select('id, damage_approval_cents').single();
     await api.rpc('update_tenant_settings', { p: { damage_approval_cents: 100 } });
     try {
-      const rep = (await api.rpc('report_damage', { p_shop: shopId, p_item: itemId, p_qty_milli: 1000, p_reason: 'broken' })).data as { id: string; status: string };
+      // Above the limit a photo is required (THR-015, migration 20261027090100).
+      const { data: t2 } = await owner.from('tenants').select('id').single();
+      const photo = `${t2!.id}/damage/test-${Date.now()}.png`;
+      await owner.storage.from('tenant-private').upload(photo, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64'), { contentType: 'image/png' });
+      const rep = (await api.rpc('report_damage', { p_shop: shopId, p_item: itemId, p_qty_milli: 1000, p_reason: 'broken', p_photo: photo })).data as { id: string; status: string };
       expect(rep.status).toBe('awaiting_approval');
       expect((await api.rpc('approve_damage', { p_report: rep.id, p_approve: true })).error?.message).toMatch(/different person/);
     } finally {

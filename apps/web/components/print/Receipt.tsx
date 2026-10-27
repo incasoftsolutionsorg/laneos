@@ -20,12 +20,14 @@ export interface ReceiptData {
   payments: { label: string; amountCents: number }[];
   changeCents: number;
   receiptUrl?: string | null;
+  /** Loyalty points on this bill (online sales with a member attached). */
+  loyalty?: { earned: number; redeemed: number; balance: number } | null;
   offline?: boolean;
   /** Settings → Receipt & printer (Figma 1-4145). */
   settings?: ReceiptSettings;
 }
 
-export interface ReceiptSettings { paper: string; header: string | null; footer: string; logo: boolean; vatNo: string | null }
+export interface ReceiptSettings { paper: string; header: string | null; footer: string; logo: boolean; vatNo: string | null; logoUrl?: string | null }
 
 // 80 mm sales receipt, logo left (Figma 11-285); 58 mm uses the same layout on a narrower roll.
 export function Receipt({ r }: { r: ReceiptData }) {
@@ -33,7 +35,7 @@ export function Receipt({ r }: { r: ReceiptData }) {
   const title = s?.vatNo ? 'TAX INVOICE' : 'RECEIPT';
   return (
     <Paper width={s?.paper === '58mm' ? '48mm' : '72mm'}>
-      <ShopHeader name={s?.header || r.tenant} logo={s?.logo ?? true} lines={[r.shop.address, r.shop.phone ? `Tel ${r.shop.phone}` : null, s?.header ? null : r.shop.name]} />
+      <ShopHeader name={s?.header || r.tenant} logo={s?.logo ?? true} logoUrl={s?.logoUrl} lines={[r.shop.address, r.shop.phone ? `Tel ${r.shop.phone}` : null, s?.header ? null : r.shop.name]} />
       <Rule />
       <p className="text-center font-bold">{r.offline ? `${title} (OFFLINE — SYNC PENDING)` : title}</p>
       {s?.vatNo ? <Row label="VAT reg. no" value={s.vatNo} /> : null}
@@ -59,6 +61,14 @@ export function Receipt({ r }: { r: ReceiptData }) {
       <Rule />
       {r.payments.map((p, i) => <Row key={i} label={p.label} value={formatAmount(p.amountCents)} />)}
       <Row label="Change" value={formatAmount(r.changeCents)} />
+      {r.loyalty ? (
+        <>
+          <Rule />
+          {r.loyalty.redeemed ? <Row label="Points used" value={`-${r.loyalty.redeemed}`} /> : null}
+          <Row label="Points earned" value={`+${r.loyalty.earned}`} />
+          <Row label="Points balance" value={r.loyalty.balance} bold />
+        </>
+      ) : null}
       <Rule />
       {s?.footer ? <p className="text-center font-bold">{s.footer}</p> : (
         <>

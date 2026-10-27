@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { PageHeader } from '@laneos/ui';
+import { Card, PageHeader } from '@laneos/ui';
 import { ItemForm } from '@/components/items/ItemForm';
+import { ItemPhoto } from '@/components/items/ItemPhoto';
+import { publicUrl } from '@/lib/storage';
 import { requireTenant } from '@/lib/server/context';
 
 export const metadata: Metadata = { title: 'Edit item' };
@@ -23,6 +25,10 @@ export default async function EditItemPage({ params }: { params: Promise<{ id: s
   return (
     <>
       <PageHeader title={item.name} subtitle="Edit item · price changes queue new shelf labels" />
+      <Card className="flex max-w-3xl items-center justify-between gap-4 p-4">
+        <div><p className="text-[13px] font-semibold">Photo</p><p className="text-xs text-text-muted">PNG, JPG or WebP up to 2 MB. Kept with the item for the back office; lanes do not show photos yet.</p></div>
+        <ItemPhoto itemId={item.id} folder={`${ctx.tenant.id}/items`} value={item.image_path} previewUrl={publicUrl(item.image_path)} />
+      </Card>
       <ItemForm
         departments={departments ?? []}
         values={{

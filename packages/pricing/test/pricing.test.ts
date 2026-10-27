@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { changeDue, lineGross, priceBasket, type BasketLine, type Promotion } from '../src';
+import { changeDue, lineGross, pointsEarned, priceBasket, type BasketLine, type Promotion } from '../src';
 
 const line = (itemId: string, qtyMilli: number, unitPriceCents: number, itemType: BasketLine['itemType'] = 'standard'): BasketLine =>
   ({ itemId, qtyMilli, unitPriceCents, itemType });
@@ -71,6 +71,52 @@ describe('priceBasket', () => {
 
   it('handles an empty basket', () => {
     expect(priceBasket([], [], { roundingUnitCents: 100 })).toMatchObject({ subtotalCents: 0, totalCents: 0, roundingCents: 0 });
+  });
+});
+
+describe('promotions v2 (SLICE-009)', () => {
+  // Biscuits Rs 120, Crackers Rs 100, Wafers Rs 90: "any 3 for Rs 270".
+  const anyThree: Promotion = { id: 'p-mm', kind: 'mix_match', itemIds: ['bisc', 'crack', 'wafer'], buyQty: 3, bundlePriceCents: 27000 };
+
+  it('mix and match groups pieces across items, most expensive first', () => {
+    const t = priceBasket([line('bisc', 2000, 12000), line('crack', 1000, 10000), line('wafer', 1000, 9000)], [anyThree]);
+    // Grouped: 120 + 120 + 100 = 340 -> 270, saving Rs 70; the wafer is left over at full price.
+    expect(t.promoCents).toBe(7000);
+    expect(t.totalCents).toBe(24000 + 10000 + 9000 - 7000);
+    const bisc = t.lines.find((l) => l.itemId === 'bisc')!;
+    const crack = t.lines.find((l) => l.itemId === 'crack')!;
+    expect(bisc.promoCents + crack.promoCents).toBe(7000);
+    expect(bisc.promoCents).toBe(Math.round((7000 * 24000) / 34000)); // shared by value, last line takes the rest
+    expect(t.lines.find((l) => l.itemId === 'wafer')!.promoCents).toBe(0);
+  });
+
+  it('mix and match only replaces item promotions when it saves more (BR-021)', () => {
+    const halfBisc: Promotion = { id: 'p-half', kind: 'percent_off', itemIds: ['bisc'], percentBp: 5000 };
+    const t = priceBasket([line('bisc', 3000, 12000)], [anyThree, halfBisc]);
+    expect(t.promoCents).toBe(18000); // 50% of 360 beats "3 for 270" (saves 90)
+    expect(t.lines[0]!.promotionId).toBe('p-half');
+    const small: Promotion = { id: 'p-5', kind: 'percent_off', itemIds: ['bisc'], percentBp: 500 };
+    expect(priceBasket([line('bisc', 3000, 12000)], [anyThree, small]).lines[0]!.promotionId).toBe('p-mm');
+  });
+
+  it('spend-X discounts apply after item promotions, best one only', () => {
+    const rs250: Promotion = { id: 'p-t1', kind: 'threshold', itemIds: [], thresholdCents: 500000, discountCents: 25000 };
+    const pct: Promotion = { id: 'p-t2', kind: 'threshold', itemIds: [], thresholdCents: 1000000, percentBp: 500 };
+    expect(priceBasket([line('rice', 5000, 123000)], [rs250, pct])).toMatchObject({ basketPromoCents: 25000, basketPromotionId: 'p-t1', totalCents: 615000 - 25000 });
+    expect(priceBasket([line('rice', 9000, 123000)], [rs250, pct])).toMatchObject({ basketPromoCents: 55350, basketPromotionId: 'p-t2' });
+    expect(priceBasket([line('rice', 3000, 123000)], [rs250]).basketPromoCents).toBe(0);
+  });
+
+  it('members-only promotions need a member on the bill', () => {
+    const members: Promotion = { id: 'p-m', kind: 'percent_off', itemIds: ['milk'], percentBp: 1000, membersOnly: true };
+    expect(priceBasket([line('milk', 1000, 118000)], [members]).promoCents).toBe(0);
+    expect(priceBasket([line('milk', 1000, 118000)], [members], { member: true }).promoCents).toBe(11800);
+  });
+
+  it('earns one point per full spend unit', () => {
+    expect(pointsEarned(49_950, 10_000)).toBe(4);
+    expect(pointsEarned(50_000, 10_000)).toBe(5);
+    expect(pointsEarned(50_000, 0)).toBe(0);
   });
 });
 

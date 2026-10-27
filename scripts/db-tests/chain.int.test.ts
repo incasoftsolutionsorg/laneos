@@ -59,7 +59,10 @@ describe('shops', () => {
 describe('shop prices', () => {
   it('an override changes the lane catalogue and the server price for that shop only', async () => {
     expect((await api.rpc('set_shop_price', { p_shop: cmb, p_item: itemId, p_price_cents: 47500 })).error).toBeNull();
-    const laneC = (await owner.from('lanes').select('id').eq('shop_id', cmb).eq('code', 'L1').single()).data!.id;
+    // CMB2 L2 is never registered by any test (security tests register L1), so it sells without a device key.
+    let { data: l2 } = await owner.from('lanes').select('id').eq('shop_id', cmb).eq('code', 'L2').maybeSingle();
+    if (!l2) { await api.rpc('add_lane', { p_shop_id: cmb, p_name: 'Lane 2' }); ({ data: l2 } = await owner.from('lanes').select('id').eq('shop_id', cmb).eq('code', 'L2').maybeSingle()); }
+    const laneC = l2!.id;
     const laneK = (await owner.from('lanes').select('id, shop:shops!inner(code)').eq('shop.code', 'KDY1').eq('code', 'L1').single()).data!.id;
     const price = async (lane: string) => ((await api.rpc('lane_catalog', { p_lane: lane })).data as { items: { id: string; priceCents: number }[] }).items.find((i) => i.id === itemId)!.priceCents;
     expect(await price(laneC)).toBe(47500);

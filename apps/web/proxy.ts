@@ -12,9 +12,12 @@ const PUBLIC = [
   '/forgot-password',
   '/reset-password',
   '/auth/callback',
+  '/auth/confirm',
   '/admin/login',
   '/r/',
   '/manifest.webmanifest',
+  '/lane-sw.js',
+  '/api/payhere/notify',
 ]
 const isPublic = (p: string) => PUBLIC.some((x) => p === x || p.startsWith(x.endsWith('/') ? x : `${x}/`))
 

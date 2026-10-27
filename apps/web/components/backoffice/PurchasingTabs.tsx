@@ -5,6 +5,7 @@ const TABS = [
   ['/backoffice/purchasing/orders', 'Purchase orders'],
   ['/backoffice/purchasing/grn', 'Goods received'],
   ['/backoffice/purchasing/payments', 'Supplier payments'],
+  ['/backoffice/purchasing/returns', 'Supplier returns'],
 ] as const;
 
 export function PurchasingTabs({ active }: { active: (typeof TABS)[number][0] }) {

@@ -4,6 +4,7 @@ import { formatRs } from '@laneos/core';
 import { A4, A4Header } from '@/components/print/A4';
 import { fmtDate } from '@/lib/server/dates';
 import { requireTenant } from '@/lib/server/context';
+import { publicUrl } from '@/lib/storage';
 
 export const metadata: Metadata = { title: 'Wholesale document' };
 
@@ -30,7 +31,7 @@ export default async function WholesalePrintPage({ params }: { params: Promise<{
 
   return (
     <A4 autoPrint>
-      <A4Header tenant={ctx.tenant.name} shop={d.shop} vatNo={vatReg ? t?.vat_no : null} title={title} meta={meta} />
+      <A4Header logoUrl={publicUrl(ctx.tenant.logo_path)} tenant={ctx.tenant.name} shop={d.shop} vatNo={vatReg ? t?.vat_no : null} title={title} meta={meta} />
       <section>
         <p className="text-black/60">{d.kind === 'quotation' ? 'Prepared for' : 'Bill to'}</p>
         <p className="text-[14px] font-bold">{d.buyer_name}</p>

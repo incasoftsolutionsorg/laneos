@@ -23,8 +23,9 @@ export async function reportDamage(prev: DamageState, form: FormData): Promise<D
   const { data, error } = await ctx.supabase.schema('api').rpc('report_damage', {
     p_shop: ctx.shop.id, p_item: item, p_qty_milli: Math.round(qty * 1000), p_reason: reason, p_source: source,
     p_note: String(form.get('note') ?? '').trim() || undefined,
+    p_photo: String(form.get('photo') ?? '') || undefined,
   });
-  if (error) return { error: dbErrorText(error) };
+  if (error) return { error: error.message.startsWith('VALIDATION_ERROR: ') ? `${error.message.slice(18, 19).toUpperCase()}${error.message.slice(19)}.` : dbErrorText(error) };
   const r = data as { reportNo: string; status: string };
   revalidatePath('/backoffice/stock/damage');
   return {

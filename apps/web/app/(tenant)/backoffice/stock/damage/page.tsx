@@ -4,6 +4,7 @@ import { EmptyRow, PageHeader, StatCard, Table, TD, TH } from '@laneos/ui';
 import { DamageActions, DamageForm } from '@/components/backoffice/Damage';
 import { colomboMonthStart } from '@/lib/server/dates';
 import { requireTenant } from '@/lib/server/context';
+import { PRIVATE_BUCKET } from '@/lib/storage';
 
 /** Value at cost of a damaged quantity (server-side; Damage.tsx is a client module). */
 const damageValue = (qtyMilli: number, unitCostCents: number) => formatRs(Math.round((qtyMilli * unitCostCents) / 1000), { decimals: 0 });
@@ -16,15 +17,20 @@ const REASON: Record<string, string> = { broken: 'Broken', leaking: 'Leaking', c
 export default async function DamagePage() {
   const ctx = await requireTenant();
   const month = colomboMonthStart();
-  const [{ data: reports }, { data: decisions }, { data: items }] = await Promise.all([
+  const [{ data: reports }, { data: decisions }, { data: items }, { data: tenant }] = await Promise.all([
     ctx.supabase.from('damage_reports')
-      .select('id, report_no, qty_milli, remaining_milli, unit_cost_cents, reason, source, status, created_at, reported_by, item:items(name, item_type)')
+      .select('id, report_no, qty_milli, remaining_milli, unit_cost_cents, reason, source, status, created_at, reported_by, photo_path, item:items(name, item_type)')
       .eq('shop_id', ctx.shop.id).order('created_at', { ascending: false }).limit(200),
     ctx.supabase.from('damage_decisions').select('decision, qty_milli, markdown_price_cents, decided_at, report:damage_reports!inner(shop_id, unit_cost_cents)')
       .eq('report.shop_id', ctx.shop.id).gte('decided_at', month),
     ctx.supabase.from('items').select('id, name, item_type, cost_cents').eq('is_active', true).neq('item_type', 'open_price').order('name').limit(5000),
+    ctx.supabase.from('tenants').select('damage_approval_cents').eq('id', ctx.tenant.id).single(),
   ]);
   const rows = reports ?? [];
+  // Damage photos are private: one-hour signed links for the reports on this page.
+  const paths = rows.map((r) => r.photo_path).filter((p): p is string => !!p);
+  const { data: signed } = paths.length ? await ctx.supabase.storage.from(PRIVATE_BUCKET).createSignedUrls(paths, 3600) : { data: [] };
+  const photo = new Map((signed ?? []).map((x) => [x.path, x.signedUrl]));
   const value = (qty: number, cost: number) => Math.round((qty * cost) / 1000);
   const waiting = rows.filter((r) => ['awaiting_decision', 'awaiting_approval', 'reported'].includes(r.status));
   const sent = rows.filter((r) => r.status === 'sent_to_supplier');
@@ -46,7 +52,7 @@ export default async function DamagePage() {
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
         {canAdjust ? (
           <div className="xl:w-[360px]">
-            <DamageForm items={(items ?? []).map((i) => ({ id: i.id, name: i.name, itemType: i.item_type as ItemType, costCents: i.cost_cents }))} />
+            <DamageForm photoFolder={`${ctx.tenant.id}/damage`} approvalCents={tenant?.damage_approval_cents ?? 1_000_000} items={(items ?? []).map((i) => ({ id: i.id, name: i.name, itemType: i.item_type as ItemType, costCents: i.cost_cents }))} />
           </div>
         ) : null}
         <div className="min-w-0 flex-1">
@@ -55,7 +61,7 @@ export default async function DamagePage() {
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id}>
-                  <TD className="font-mono text-xs">{r.report_no}</TD>
+                  <TD className="font-mono text-xs">{r.report_no}{r.photo_path && photo.get(r.photo_path) ? <a href={photo.get(r.photo_path)!} target="_blank" rel="noreferrer" className="ml-2 font-sans font-semibold text-brand-primary hover:underline">Photo</a> : null}</TD>
                   <TD className="font-medium">{r.item?.name}{r.source === 'customer_return' ? <span className="block text-xs font-normal text-text-muted">customer return</span> : null}</TD>
                   <TD className="tabular-nums">{formatQty(r.status === 'awaiting_decision' ? r.remaining_milli : r.qty_milli, (r.item?.item_type ?? 'standard') as ItemType)}</TD>
                   <TD>{REASON[r.reason]}</TD>

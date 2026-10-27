@@ -71,7 +71,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
               {canManage ? <Link href={`/backoffice/purchasing/payments?supplier=${sel.id}`} className={buttonClass('primary')}>Pay supplier</Link> : null}
               {canOrder ? <Link href={`/backoffice/purchasing/orders/new?supplier=${sel.id}`} className={buttonClass('secondary')}>New PO</Link> : null}
             </div>
-            <Link href="/backoffice/stock/damage" className={buttonClass('soft')}>Return goods / damaged</Link>
+            <Link href={`/backoffice/purchasing/returns/new?supplier=${sel.id}`} className={buttonClass('soft')}>Return goods / damaged</Link>
             <p className="text-[13px] font-semibold">Recent GRNs</p>
             {recent.map((g) => (
               <Link key={g.id} href={`/backoffice/purchasing/grn/${g.id}`} className="flex justify-between text-[13px] hover:underline">

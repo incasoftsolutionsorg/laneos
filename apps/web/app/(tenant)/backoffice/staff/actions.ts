@@ -45,7 +45,8 @@ export async function addMember(v: MemberInput): Promise<StaffResult> {
   }
   if (email) {
     const { error: inviteError } = await createAdminClient().auth.admin.inviteUserByEmail(email, {
-      redirectTo: `${await origin()}/auth/callback?next=/backoffice`,
+      // Invite links carry the session in the URL fragment; /auth/confirm finishes sign-in, then they choose a password.
+      redirectTo: `${await origin()}/auth/confirm?next=/reset-password`,
       data: { display_name: v.name.trim() },
     });
     if (inviteError) {

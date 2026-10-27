@@ -4,6 +4,7 @@ import { formatRs } from '@laneos/core';
 import { A4, A4Header } from '@/components/print/A4';
 import { fmtDate } from '@/lib/server/dates';
 import { requireTenant } from '@/lib/server/context';
+import { publicUrl } from '@/lib/storage';
 
 export const metadata: Metadata = { title: 'Customer statement' };
 
@@ -26,6 +27,7 @@ export default async function StatementPage({ params }: { params: Promise<{ id: 
   return (
     <A4>
       <A4Header
+        logoUrl={publicUrl(ctx.tenant.logo_path)}
         tenant={ctx.tenant.name}
         shop={{ name: shop?.name ?? ctx.shop.name, address: shop?.address, phone: shop?.phone }}
         vatNo={tenant?.vat_no}

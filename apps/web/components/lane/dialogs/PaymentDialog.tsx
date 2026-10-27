@@ -13,14 +13,16 @@ export interface Tender { method: PaymentMethod; amountCents: number; reference?
 
 type Mode = PaymentMethod | 'split';
 
-const LABEL: Record<PaymentMethod, string> = { cash: 'Cash', card: 'Card', lankaqr: 'LankaQR', credit_note: 'Credit note', account: 'On account' };
+const LABEL: Record<PaymentMethod, string> = { cash: 'Cash', card: 'Card', lankaqr: 'LankaQR', credit_note: 'Credit note', account: 'On account', loyalty: 'Points' };
 
 /** Take payment (Figma 1-1159): cash, card, LankaQR, credit note, on account (named credit customer) or a split. */
 export function PaymentDialog({
-  totalCents, laneId, offline, initialMode = 'cash', appliedNote, customer, onClose, submit,
+  totalCents, laneId, offline, initialMode = 'cash', appliedNote, customer, loyalty, onClose, submit,
 }: {
   totalCents: number; laneId: string; offline: boolean; initialMode?: Mode; appliedNote?: AppliedNote | null;
   customer?: CustomerHit | null;
+  /** Tenant loyalty settings from the lane catalogue. */
+  loyalty?: { enabled: boolean; pointValueCents: number; minRedeem: number };
   onClose: () => void;
   submit: (tenders: Tender[], print: boolean) => Promise<string | null>;
 }) {
@@ -51,8 +53,21 @@ export function PaymentDialog({
       case 'credit_note': return note ? [noteTender(note)] : [];
       case 'account': return customer && creditLeft >= totalCents ? [{ method: 'account', amountCents: totalCents, label: `On account · ${customer.name}` }] : [];
       case 'split': return [...entries, ...(cashCents ? [{ method: 'cash' as const, amountCents: cashCents, label: 'Cash' }] : [])];
+      case 'loyalty': return entries;
     }
   }, [mode, cashCents, totalCents, reference, note, entries, customer, creditLeft]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Points pay in whole points and never more than the bill still needs (change comes from cash only).
+  const owedBeforePoints = Math.max(0, totalCents - entries.filter((t) => t.method !== 'loyalty').reduce((s, t) => s + t.amountCents, 0));
+  const pointsUsable = loyalty?.enabled && customer && !entries.some((t) => t.method === 'loyalty')
+    ? Math.min(customer.loyaltyPoints, Math.floor(owedBeforePoints / loyalty.pointValueCents)) : 0;
+  const canUsePoints = !offline && !!loyalty && pointsUsable >= loyalty.minRedeem;
+  const usePoints = () => {
+    if (!loyalty || !canUsePoints) return;
+    setEntries((e) => [...e, { method: 'loyalty', amountCents: pointsUsable * loyalty.pointValueCents, reference: String(pointsUsable),
+      label: `${pointsUsable.toLocaleString('en-LK')} points` }]);
+    setMode('split');
+  };
 
   const paid = tenders.reduce((s, t) => s + t.amountCents, 0);
   const nonCash = tenders.filter((t) => t.method !== 'cash').reduce((s, t) => s + t.amountCents, 0);
@@ -80,13 +95,21 @@ export function PaymentDialog({
   return (
     <Dialog title="Take payment" onClose={onClose} width={640} aside={<span className="text-lg font-bold text-brand-primary">Total {formatRs(totalCents)}</span>}>
       <div className={tabsClass()} role="tablist" aria-label="Payment method">
-        {(['cash', 'card', 'lankaqr', 'credit_note', 'account', 'split'] as const).map((m) => (
+        {(['cash', 'card', 'lankaqr', 'credit_note', 'account', ...(loyalty?.enabled ? ['loyalty' as const] : []), 'split'] as const).map((m) => (
           <button key={m} type="button" role="tab" aria-selected={mode === m} className={tabClass(mode === m)}
-            disabled={(m === 'credit_note' || m === 'account') && offline} onClick={() => { setMode(m); setError(null); }}>
+            disabled={(m === 'credit_note' || m === 'account' || m === 'loyalty') && offline}
+            onClick={() => { setError(null); if (m === 'loyalty') { if (canUsePoints) usePoints(); else setMode('loyalty'); } else setMode(m); }}>
             {m === 'split' ? 'Split' : LABEL[m]}
           </button>
         ))}
       </div>
+
+      {mode === 'loyalty' ? (
+        <Alert tone="warning">
+          {!customer ? 'Attach the loyalty member first (F7).'
+            : `${customer.name} has ${customer.loyaltyPoints.toLocaleString('en-LK')} points; at least ${loyalty?.minRedeem ?? 0} are needed to pay with points.`}
+        </Alert>
+      ) : null}
 
       {mode === 'card' || mode === 'lankaqr' ? (
         <Field label="Reference" hint="Approval code or last 4 digits — never the full card number">

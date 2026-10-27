@@ -26,6 +26,17 @@ export async function cancelNote(prev: NoteActionState, form: FormData): Promise
   return { ok: (prev.ok ?? 0) + 1 };
 }
 
+/** Cash out a credit note's balance (Settings → Security must allow it; manager or owner). */
+export async function cashOutNote(prev: NoteActionState, form: FormData): Promise<NoteActionState> {
+  const ctx = await requireTenant('shift.manage');
+  const { error } = await ctx.supabase.schema('api').rpc('cash_out_credit_note', {
+    p_note: String(form.get('id')), p_reason: String(form.get('reason') ?? ''),
+  });
+  if (error) return { error: error.message.startsWith('FORBIDDEN:') ? 'Cashing out credit notes is turned off in Settings → Security.' : dbErrorText(error) };
+  revalidatePath('/backoffice/credit-notes');
+  return { ok: (prev.ok ?? 0) + 1 };
+}
+
 export async function resolveSyncIssue(prev: NoteActionState, form: FormData): Promise<NoteActionState> {
   const ctx = await requireTenant('shift.manage');
   const { error } = await ctx.supabase.schema('api').rpc('resolve_sync_issue', {

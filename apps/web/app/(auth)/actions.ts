@@ -4,6 +4,7 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { normalizeLkPhone } from '@laneos/core';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 
 export interface FormState { error?: string; message?: string }
@@ -23,15 +24,31 @@ export async function signIn(_: FormState, form: FormData): Promise<FormState> {
   const password = String(form.get('password') ?? '');
   if (!email || !password) return { error: 'Enter your email and password.' };
 
+  // Failed-login lock (Settings → Security, blueprint §27.6): checked and recorded with the service role,
+  // because nobody is signed in yet and the counts must not be writable by the browser.
+  const admin = createAdminClient();
+  const { data: gate } = await admin.schema('api').rpc('login_gate', { p_email: email });
+  const g = gate as { locked: boolean; until: string | null } | null;
+  if (g?.locked) {
+    const mins = g.until ? Math.max(1, Math.ceil((Date.parse(g.until) - Date.now()) / 60_000)) : 15;
+    return { error: `Too many wrong passwords. Try again in ${mins} minute${mins === 1 ? '' : 's'}, or reset the password.` };
+  }
+
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {
+    if (error.code !== 'email_not_confirmed') await admin.schema('api').rpc('login_record', { p_email: email, p_ok: false });
     return {
       error: error.code === 'email_not_confirmed'
         ? 'Confirm your email first — check your inbox for the link.'
         : 'That email and password do not match.',
     };
   }
+  await admin.schema('api').rpc('login_record', { p_email: email, p_ok: true });
+
+  // "One session per person": signing in here ends this person's other sessions.
+  const { data: strict } = await supabase.from('tenants').select('strict_sessions').maybeSingle();
+  if (strict?.strict_sessions) await supabase.auth.signOut({ scope: 'others' });
   // An enrolled authenticator means a code is needed before the back office opens.
   const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
   if (aal?.nextLevel === 'aal2' && aal.currentLevel !== 'aal2') {

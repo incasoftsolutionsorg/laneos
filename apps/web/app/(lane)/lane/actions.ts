@@ -19,14 +19,27 @@ export async function registerLane(laneId: string): Promise<{ key?: string; erro
 }
 
 export async function unlockLane(laneId: string, key: string | null, memberId: string, pin: string)
-  : Promise<{ ok: boolean; error?: string; name?: string }> {
+  : Promise<{ ok: boolean; error?: string; code?: string; name?: string }> {
   const ctx = await requireTenant('sale.create');
   const { data, error } = await ctx.supabase.schema('api').rpc('lane_unlock', {
     p_lane: laneId, p_key: key ?? '', p_member: memberId, p_pin: pin,
   });
   if (error) return { ok: false, error: dbErrorText(error) };
   const r = data as { ok: boolean; error?: string; member?: { name: string } };
-  return r.ok ? { ok: true, name: r.member?.name } : { ok: false, error: text(r.error) };
+  return r.ok ? { ok: true, name: r.member?.name } : { ok: false, code: r.error, error: text(r.error) };
+}
+
+/** Settings → Security "Ask for a new PIN every …": the cashier proves the old PIN and sets a new one at the lane. */
+export async function changeLanePin(laneId: string, key: string | null, memberId: string, oldPin: string, newPin: string)
+  : Promise<{ ok: boolean; error?: string }> {
+  const ctx = await requireTenant('sale.create');
+  const { data, error } = await ctx.supabase.schema('api').rpc('lane_change_pin', {
+    p_lane: laneId, p_key: key ?? '', p_member: memberId, p_old: oldPin, p_new: newPin,
+  });
+  if (error) return { ok: false, error: dbErrorText(error) };
+  const r = data as { ok: boolean; error?: string; message?: string };
+  if (r.ok) return { ok: true };
+  return { ok: false, error: r.error === 'VALIDATION_ERROR' && r.message ? `${r.message[0]!.toUpperCase()}${r.message.slice(1)}.` : text(r.error) };
 }
 
 export async function lockLane(laneId: string) {

@@ -5,6 +5,7 @@ import { LanePrinter, ReceiptPreview } from '@/components/backoffice/ReceiptSett
 import { SettingsDraft } from '@/components/backoffice/Settings';
 import { DSegment, DSwitch, DText } from '@/components/backoffice/SettingsFields';
 import { requireTenant } from '@/lib/server/context';
+import { publicUrl } from '@/lib/storage';
 
 export const metadata: Metadata = { title: 'Receipt & printer' };
 
@@ -36,7 +37,7 @@ export default async function ReceiptSettingsPage() {
           <DSwitch name="receipt_local_language" label="Print in Sinhala / Tamil" hint="Printed as an image" />
           {owner ? <LanePrinter lanes={(lanes ?? []).map((l) => ({ id: l.id, code: l.code, name: l.name, printer: l.printer_name }))} /> : null}
         </Card>
-        <ReceiptPreview base={{ tenant: ctx.tenant.name, shop: { name: shop?.name ?? ctx.shop.name, address: shop?.address, phone } }} />
+        <ReceiptPreview logoUrl={publicUrl(ctx.tenant.logo_path)} base={{ tenant: ctx.tenant.name, shop: { name: shop?.name ?? ctx.shop.name, address: shop?.address, phone } }} />
       </div>
     </SettingsDraft>
   );

@@ -1,0 +1,17 @@
+name: Change request
+description: Change an approved requirement, scope or decision
+title: "CR-2026-<NNN>: "
+labels: ["type:change-request"]
+body:
+  - type: textarea
+    id: change
+    attributes: { label: What should change and why }
+    validations: { required: true }
+  - type: input
+    id: affected
+    attributes: { label: Affected IDs (REQ, SLICE, ADR, DOC) }
+    validations: { required: true }
+  - type: textarea
+    id: impact
+    attributes: { label: "Impact: scope, data, security, schedule" }
+    validations: { required: true }

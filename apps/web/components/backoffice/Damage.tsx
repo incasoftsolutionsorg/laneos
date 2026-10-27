@@ -1,5 +1,9 @@
 'use client';
 
+import Link from 'next/link';
+import { ImageUpload } from '@/components/ImageUpload';
+import { PRIVATE_BUCKET } from '@/lib/storage';
+
 import { useActionState, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search } from 'lucide-react';
@@ -11,7 +15,13 @@ import { approveDamage, decideDamage, reportDamage, type DamageState } from '@/a
 const REASONS = [['broken', 'Broken'], ['leaking', 'Leaking'], ['crushed', 'Crushed'], ['expired', 'Expired'], ['pest', 'Pest'], ['temperature', 'Temperature'], ['other', 'Other']] as const;
 
 /** Report damaged stock (left card of Figma 1-1849). */
-export function DamageForm({ items }: { items: { id: string; name: string; itemType: ItemType; costCents: number | null }[] }) {
+export function DamageForm({ items, photoFolder, approvalCents }: {
+  items: { id: string; name: string; itemType: ItemType; costCents: number | null }[];
+  /** "<tenant_id>/damage" in the private bucket. */
+  photoFolder: string;
+  /** Above this value (at cost) a photo is required (THR-015). */
+  approvalCents: number;
+}) {
   const [state, action, pending] = useActionState(reportDamage, {} as DamageState);
   const [q, setQ] = useState('');
   const [item, setItem] = useState<(typeof items)[number] | null>(null);
@@ -57,6 +67,10 @@ export function DamageForm({ items }: { items: { id: string; name: string; itemT
           </Select>
         </Field>
         <Field label="Note (optional)"><Input name="note" maxLength={500} /></Field>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-semibold">Photo {`(needed above Rs ${(approvalCents / 100).toLocaleString('en-LK')} at cost)`}</span>
+          <ImageUpload key={state.ok} bucket={PRIVATE_BUCKET} folder={photoFolder} base={`report-${Date.now()}`} name="photo" label="Add photo" maxMb={5} />
+        </div>
         <p className="rounded-control border border-dashed border-border-strong p-3 text-xs text-text-muted">Photos (needed above the approval limit) come with the storage task; add details in the note for now.</p>
         <Button type="submit" disabled={pending || !item}>{pending ? 'Saving…' : 'Submit report'}</Button>
       </form>
@@ -101,7 +115,7 @@ export function DamageActions({ id, reportNo, remainingMilli, itemType, status, 
   return (
     <>
       <span className="flex gap-3 text-xs font-semibold">
-        <button type="button" className="text-brand-primary hover:underline" onClick={() => setOpen('supplier_return')}>Return</button>
+        <Link href={`/backoffice/purchasing/returns/new?report=${id}`} className="text-brand-primary hover:underline">Return</Link>
         <button type="button" className="text-brand-primary hover:underline" onClick={() => setOpen('reduced_sale')}>Reduce</button>
         <button type="button" className="text-danger hover:underline" onClick={() => setOpen('write_off')}>Write off</button>
       </span>
@@ -115,7 +129,6 @@ export function DamageActions({ id, reportNo, remainingMilli, itemType, status, 
               <Input name="qty" type="number" min={0.001} step={itemType === 'weighed' ? '0.001' : '1'} max={remainingMilli / 1000} defaultValue={remainingMilli / 1000} required />
             </Field>
             {open === 'reduced_sale' ? <Field label="Reduced price (Rs)" hint="A reduced sticker is queued in Print labels"><Input name="markdown" inputMode="decimal" required autoFocus /></Field> : null}
-            {open === 'supplier_return' ? <p className="text-xs text-text-muted">The supplier return note and credit come with purchasing; this records the decision and removes the stock.</p> : null}
             <Button type="submit" variant={open === 'write_off' ? 'danger' : 'primary'} disabled={pending}>{pending ? 'Saving…' : TITLE[open]}</Button>
           </form>
         </Dialog>
