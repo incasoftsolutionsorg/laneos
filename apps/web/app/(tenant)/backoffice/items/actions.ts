@@ -68,3 +68,13 @@ export async function deactivateItem(form: FormData) {
   revalidatePath('/backoffice/items');
   if (form.get('back')) redirect('/backoffice/items');
 }
+
+/** Item photo (Storage path already uploaded by the browser), or null to remove it. */
+export async function setItemImage(itemId: string, path: string | null): Promise<string | null> {
+  const ctx = await requireTenant('item.edit');
+  const { error } = await ctx.supabase.schema('api').rpc('set_item_image', { p_item: itemId, p_path: path as string });
+  if (error) return dbErrorText(error);
+  revalidatePath(`/backoffice/items/${itemId}`);
+  revalidatePath('/backoffice/items');
+  return null;
+}

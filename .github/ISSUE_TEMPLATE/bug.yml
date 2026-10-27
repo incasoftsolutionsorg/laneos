@@ -1,0 +1,39 @@
+name: Bug report
+description: Something is broken or wrong
+title: "[BUG] "
+labels: ["type:bug", "needs-triage"]
+body:
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity (reporter's view, triage confirms)
+      options: ["S1 Critical - data leak, wrong money, checkout down", "S2 Major - no workaround", "S3 Minor - workaround exists", "S4 Cosmetic"]
+    validations: { required: true }
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [lane, devices, backoffice, admin, api, db, security, billing, reports]
+    validations: { required: true }
+  - type: input
+    id: env
+    attributes: { label: "Environment and version", placeholder: "staging v1.0.3 / production v1.1.0" }
+    validations: { required: true }
+  - type: input
+    id: ids
+    attributes: { label: "Tenant / shop / lane / requestId (no personal data)", placeholder: "tenant demo-2, shop KDY1, lane L2, req_01J..." }
+  - type: textarea
+    id: steps
+    attributes: { label: Steps to reproduce, placeholder: "1. ...\n2. ...\n3. ..." }
+    validations: { required: true }
+  - type: textarea
+    id: expected
+    attributes: { label: Expected result }
+    validations: { required: true }
+  - type: textarea
+    id: actual
+    attributes: { label: Actual result (error code, screenshot, Sentry link) }
+    validations: { required: true }
+  - type: input
+    id: req
+    attributes: { label: Related requirement ID, placeholder: "REQ-SAL-004" }

@@ -9,9 +9,12 @@ export function buildCsp(nonce: string, isDev: boolean) {
     `font-src 'self'`,
     // wss://localhost:8181/8182 are the QZ Tray ports
     `connect-src 'self' ${supabase} ${wsSupabase} https://*.sentry.io wss://localhost:8181 wss://localhost:8182`,
+    // The lane's offline service worker (public/lane-sw.js); strict-dynamic would otherwise block it.
+    `worker-src 'self'`,
     `frame-ancestors 'none'`,
     `base-uri 'self'`,
-    `form-action 'self'`,
+    // PayHere checkout is a form post to PayHere (Plan & billing).
+    `form-action 'self' https://sandbox.payhere.lk https://www.payhere.lk`,
     `object-src 'none'`,
   ]
   if (!isDev) d.push('upgrade-insecure-requests')

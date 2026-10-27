@@ -1,0 +1,94 @@
+# CI (blueprint Appendix B, adapted to this repo's scripts and test layout).
+#   test        — typecheck every package, unit tests (incl. the data-model doc check), production build
+#   migrations  — every migration applies cleanly to a fresh local Supabase (Postgres 17)
+#   integration — `pnpm test:db` against the staging project; runs only where the staging secrets exist
+#   security    — secret scan and dependency audit
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      # The build only needs syntactically valid values; nothing connects at build time.
+      NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder
+      NEXT_PUBLIC_ROOT_DOMAIN: localhost:3000
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm --filter @laneos/web build
+
+  migrations:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with: { version: latest }
+      - name: Start a local Supabase and apply every migration
+        run: |
+          supabase start -x studio,imgproxy,mailpit,edge-runtime,logflare,vector,supavisor
+          supabase db reset --no-seed
+      - name: RLS is enabled and forced on every public table
+        run: |
+          supabase db query "select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
+            where n.nspname = 'public' and c.relkind = 'r' and not (c.relrowsecurity and c.relforcerowsecurity)" --local --output-format json > rls.json
+          cat rls.json
+          python3 -c "import json,sys; rows=json.load(open('rls.json')); rows=rows.get('rows', rows) if isinstance(rows, dict) else rows; sys.exit(1 if rows else 0)"
+
+  integration:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    env:
+      HAS_STAGING: ${{ secrets.STAGING_SUPABASE_URL != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        if: env.HAS_STAGING == 'true'
+      - uses: pnpm/action-setup@v4
+        if: env.HAS_STAGING == 'true'
+      - uses: actions/setup-node@v4
+        if: env.HAS_STAGING == 'true'
+        with: { node-version: 22, cache: pnpm }
+      - if: env.HAS_STAGING == 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Write apps/web/.env.local from secrets
+        if: env.HAS_STAGING == 'true'
+        run: |
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=${{ secrets.STAGING_SUPABASE_URL }}"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.STAGING_SUPABASE_ANON_KEY }}"
+            echo "DEMO_OWNER_EMAIL=${{ secrets.DEMO_OWNER_EMAIL }}"
+            echo "DEMO_OWNER_PASSWORD=${{ secrets.DEMO_OWNER_PASSWORD }}"
+            echo "DEMO_ADMIN_EMAIL=${{ secrets.DEMO_ADMIN_EMAIL }}"
+            echo "DEMO_ADMIN_PASSWORD=${{ secrets.DEMO_ADMIN_PASSWORD }}"
+          } > apps/web/.env.local
+      - if: env.HAS_STAGING == 'true'
+        run: pnpm test:db
+      - if: env.HAS_STAGING != 'true'
+        run: echo "Staging secrets are not set; skipping integration tests."
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: gitleaks/gitleaks-action@v2
+        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --audit-level high

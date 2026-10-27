@@ -82,7 +82,7 @@ describe('people', () => {
     const { data: before } = await owner.from('members').select('perm_v').eq('id', memberId).single();
     expect((await api.rpc('update_member', { p: { id: memberId, permsAdd: 0 } })).error).toBeNull();
     expect((await owner.from('members').select('perm_v').eq('id', memberId).single()).data!.perm_v).toBe(before!.perm_v + 1);
-    expect((await api.rpc('set_pin', { p_member: memberId, p_pin: '1111' })).error?.message).toMatch(/PIN must be/);
+    expect((await api.rpc('set_pin', { p_member: memberId, p_pin: '1111' })).error?.message).toMatch(/PIN must be|too simple/);
   });
 
   it('lists my sessions and reports member status', async () => {
@@ -141,7 +141,7 @@ describe('customer credit and wholesale', () => {
 describe('reports', () => {
   it('returns every tab for this month', async () => {
     const from = `${today.slice(0, 8)}01`;
-    for (const kind of ['sales', 'margin', 'items', 'stock', 'damage', 'credit_notes', 'tax']) {
+    for (const kind of ['sales', 'margin', 'items', 'stock', 'damage', 'shrinkage', 'expiry', 'promotions', 'credit_notes', 'tax']) {
       const { data, error } = await api.rpc('report', { p_shop: shopId, p_kind: kind, p_from: from, p_to: today });
       expect(error, kind).toBeNull();
       expect(data, kind).toBeTruthy();

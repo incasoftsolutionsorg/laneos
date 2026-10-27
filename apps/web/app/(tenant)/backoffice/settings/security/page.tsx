@@ -24,10 +24,10 @@ export default async function SecuritySettingsPage() {
         <DSegment name="require_2fa" label="Require 2-step verification for" options={[['owners', 'Owners'], ['managers', 'Owners & managers'], ['all', 'Everyone with a login']]} />
         <div className="grid gap-4 md:grid-cols-3">
           <DNumber name="idle_timeout_min" label="Back office signs out after" min={10} max={120} suffix="min idle" />
-          <DNumber name="failed_login_limit" label="Lock after" min={3} max={10} suffix="wrong passwords" later />
-          <DNumber name="failed_login_lock_min" label="Lock for" min={5} max={60} suffix="minutes" later />
+          <DNumber name="failed_login_limit" label="Lock after" min={3} max={10} suffix="wrong passwords" />
+          <DNumber name="failed_login_lock_min" label="Lock for" min={5} max={60} suffix="minutes" />
         </div>
-        <DSwitch name="strict_sessions" label="One session per person" hint="Signing in on a new device ends the old one" later />
+        <DSwitch name="strict_sessions" label="One session per person" hint="Signing in on a new device ends the old one" />
         <DSwitch name="login_alerts" label="Email the owner about new-device sign-ins" later />
       </Card>
       <Card className="flex flex-col gap-4 p-5">
@@ -35,12 +35,12 @@ export default async function SecuritySettingsPage() {
         <div className="grid gap-4 md:grid-cols-3">
           <DNumber name="lane_lock_min" label="Lane locks after" min={1} max={15} suffix="min idle" />
           <DNumber name="pin_length_min" label="Shortest PIN" min={4} max={6} suffix="digits" />
-          <DNumber name="pin_change_days" label="Ask for a new PIN every" min={30} max={180} suffix="days (blank = never)" later />
+          <DNumber name="pin_change_days" label="Ask for a new PIN every" min={30} max={180} suffix="days (blank = never)" />
         </div>
       </Card>
       <Card className="flex flex-col gap-4 p-5">
         <CardTitle>Money & data</CardTitle>
-        <DSwitch name="credit_note_cash_out" label="Allow cashing out credit notes" hint="Off: credit notes can only be spent" later />
+        <DSwitch name="credit_note_cash_out" label="Allow cashing out credit notes" hint="On: a manager can pay out a credit note's balance in Returns & credit notes, with a reason" />
         <DSwitch name="export_owner_only" label="Only owners can export data" hint="CSV exports from reports and lists" />
       </Card>
       {owner ? <ResetAllAccess shopName={ctx.shop.name} multiShop={ctx.shops.length > 1} /> : null}

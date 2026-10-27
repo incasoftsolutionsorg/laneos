@@ -1,0 +1,19 @@
+name: Task
+description: A piece of work that implements part of a requirement
+labels: ["type:task"]
+body:
+  - type: input
+    id: parent
+    attributes: { label: Parent requirement, placeholder: "REQ-SAL-004 (#120)" }
+    validations: { required: true }
+  - type: textarea
+    id: work
+    attributes: { label: What to build (files, functions, screens) }
+    validations: { required: true }
+  - type: dropdown
+    id: size
+    attributes: { label: Size, options: ["XS (1h)", "S (half day)", "M (1-2 days)", "L (3-5 days)"] }
+    validations: { required: true }
+  - type: textarea
+    id: done
+    attributes: { label: Done when, placeholder: "- tests ...\n- demo ..." }

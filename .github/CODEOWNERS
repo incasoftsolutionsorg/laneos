@@ -1,0 +1,28 @@
+# Reviewers by area (blueprint Appendix A.6). Replace @chathuka55 with each owner's handle
+# (P1 DB & security, P2 backend, P3 lane & devices, P4 back office & DevOps) as the team joins the org.
+*                                   @chathuka55
+
+# Database, security and auth (P1)
+/supabase/migrations/               @chathuka55
+/scripts/db-tests/                  @chathuka55
+/apps/web/proxy.ts                  @chathuka55
+/apps/web/lib/server/admin.ts       @chathuka55
+/apps/web/lib/security/             @chathuka55
+/docs/adr/                          @chathuka55
+/docs/08-data-model.md              @chathuka55
+
+# Backend and integrations (P2)
+/apps/web/app/api/                  @chathuka55
+/packages/core/                     @chathuka55
+
+# Lane and devices (P3)
+/apps/web/app/(lane)/               @chathuka55
+/packages/pricing/                  @chathuka55
+/packages/barcode/                  @chathuka55
+
+# Back office, QA and DevOps (P4)
+/apps/web/app/(tenant)/             @chathuka55
+/apps/web/app/(platform)/           @chathuka55
+/packages/ui/                       @chathuka55
+/.github/                           @chathuka55
+/docs/10-ui.md                      @chathuka55

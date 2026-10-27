@@ -5,7 +5,7 @@ import { Badge, EmptyRow, PageHeader, Table, TD, TH, buttonClass, chipClass, typ
 import { ReasonAction } from '@/components/backoffice/RowActions';
 import { colomboToday, fmtDate } from '@/lib/server/dates';
 import { requireTenant } from '@/lib/server/context';
-import { cancelNote, extendNote } from './actions';
+import { cancelNote, cashOutNote, extendNote } from './actions';
 
 export const metadata: Metadata = { title: 'Returns & credit notes' };
 
@@ -25,10 +25,12 @@ export default async function CreditNotesPage({ searchParams }: { searchParams: 
   if (filter === 'open') q = q.in('status', ['active', 'partially_used']).gte('expires_on', today);
   if (filter === 'used') q = q.in('status', ['used', 'cancelled', 'cashed_out']);
   if (filter === 'expired') q = q.or(`status.eq.expired,and(status.in.(active,partially_used),expires_on.lt.${today})`);
-  const [{ data }, { data: lanes }] = await Promise.all([
+  const [{ data }, { data: lanes }, { data: t }] = await Promise.all([
     q,
     ctx.supabase.from('lanes').select('id, code').eq('shop_id', ctx.shop.id).eq('status', 'active').order('code'),
+    ctx.supabase.from('tenants').select('credit_note_cash_out').eq('id', ctx.tenant.id).single(),
   ]);
+  const canCashOut = !!t?.credit_note_cash_out && hasPerm(ctx.member.perms, 'shift.manage');
   const rows = data ?? [];
   const canManage = hasPerm(ctx.member.perms, 'settings.manage');
   const canReturn = hasPerm(ctx.member.perms, 'return.create');
@@ -85,6 +87,9 @@ export default async function CreditNotesPage({ searchParams }: { searchParams: 
                           fields={[{ name: 'days', label: 'Extra days', type: 'number', defaultValue: '30' }]} submitLabel="Extend" />
                         {r.status !== 'expired' ? (
                           <ReasonAction label="Cancel" title={`Cancel ${r.note_no}`} action={cancelNote} hidden={{ id: r.id }} danger submitLabel="Cancel credit note" />
+                        ) : null}
+                        {canCashOut ? (
+                          <ReasonAction label="Cash out" title={`Pay out ${formatRs(r.balance_cents)} for ${r.note_no}`} action={cashOutNote} hidden={{ id: r.id }} danger submitLabel="Pay out in cash" />
                         ) : null}
                       </div>
                     ) : '—'}

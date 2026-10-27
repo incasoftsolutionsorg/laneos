@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { formatRs } from '@laneos/core';
-import { Badge, EmptyRow, Input, PageHeader, Table, TD, TH, chipClass } from '@laneos/ui';
+import { Badge, EmptyRow, Input, PageHeader, Table, TD, TH, buttonClass, chipClass } from '@laneos/ui';
 import { STATUS_TONE } from '@/lib/admin-ui';
 import { ago } from '@/lib/server/dates';
 import { requireAdmin } from '@/lib/server/admin';
@@ -22,7 +22,7 @@ export default async function AdminTenantsPage({ searchParams }: { searchParams:
   const filters = ['', 'trial', 'active', 'past_due', 'suspended', 'cancelled'];
   return (
     <>
-      <PageHeader title="Tenants" subtitle={`${rows.length} businesses`} />
+      <PageHeader title="Tenants" subtitle={`${rows.length} businesses`} actions={<Link href="/admin/tenants/new" className={buttonClass('primary')}>+ New tenant</Link>} />
       <div className="flex flex-wrap items-center gap-2">
         <form className="w-72"><Input name="q" defaultValue={q} placeholder="Search name or slug" aria-label="Search tenants" />{status ? <input type="hidden" name="status" value={status} /> : null}</form>
         {filters.map((f) => <Link key={f} href={`/admin/tenants?${new URLSearchParams({ ...(q ? { q } : {}), ...(f ? { status: f } : {}) })}`} className={chipClass(f === status)}>{f ? f.replace('_', ' ') : 'All'}</Link>)}

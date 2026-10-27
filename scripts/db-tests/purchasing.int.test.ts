@@ -107,3 +107,34 @@ describe('supplier payments', () => {
     expect((await api.rpc('pay_supplier', { p_shop: shopId, p: { supplierId, method: 'cheque', amountCents: 100, allocations: [] } })).error?.message).toMatch(/cheque number/);
   });
 });
+
+describe('supplier returns', () => {
+  const levels = async () => (await owner.from('stock_levels').select('qty_milli, damaged_milli').eq('shop_id', shopId).eq('item_id', itemId).single()).data!;
+
+  it('a refused return puts damaged and sellable goods back', async () => {
+    const dmg = (await api.rpc('report_damage', { p_shop: shopId, p_item: itemId, p_qty_milli: 1000, p_reason: 'crushed' })).data as { id: string };
+    const before = await levels();
+    const r = await api.rpc('create_supplier_return', { p_shop: shopId, p: { supplierId, lines: [{ damageReportId: dmg.id, qtyMilli: 1000 }, { itemId, qtyMilli: 2000 }] } });
+    expect(r.error).toBeNull();
+    const id = (r.data as { id: string; returnNo: string }).id;
+    expect((r.data as { returnNo: string }).returnNo).toMatch(/^SRN-KDY1-\d{6}$/);
+    const sent = await levels();
+    expect(sent.damaged_milli).toBe(before.damaged_milli - 1000);
+    expect(sent.qty_milli).toBe(before.qty_milli - 2000);
+    expect((await owner.from('damage_reports').select('status').eq('id', dmg.id).single()).data!.status).toBe('sent_to_supplier');
+
+    expect((await api.rpc('answer_supplier_return', { p_return: id, p_action: 'reject', p_credit_cents: null, p_note: 'Not our fault' })).error).toBeNull();
+    const back = await levels();
+    expect(back).toMatchObject({ damaged_milli: before.damaged_milli, qty_milli: before.qty_milli });
+    expect((await owner.from('damage_reports').select('status, remaining_milli').eq('id', dmg.id).single()).data).toMatchObject({ status: 'awaiting_decision', remaining_milli: 1000 });
+  });
+
+  it('a credited return lowers what we owe the supplier', async () => {
+    const owed = (await owner.from('suppliers').select('balance_due_cents').eq('id', supplierId).single()).data!.balance_due_cents;
+    const r = await api.rpc('create_supplier_return', { p_shop: shopId, p: { supplierId, lines: [{ itemId, qtyMilli: 1000 }] } });
+    const id = (r.data as { id: string }).id;
+    expect((await api.rpc('answer_supplier_return', { p_return: id, p_action: 'credit', p_credit_cents: 70000, p_note: 'CN-778' })).error).toBeNull();
+    expect((await owner.from('suppliers').select('balance_due_cents').eq('id', supplierId).single()).data!.balance_due_cents).toBe(owed - 70000);
+    expect((await api.rpc('answer_supplier_return', { p_return: id, p_action: 'reject', p_credit_cents: null, p_note: 'again' })).error?.message).toMatch(/already been answered/);
+  });
+});

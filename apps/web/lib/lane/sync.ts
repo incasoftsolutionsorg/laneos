@@ -5,7 +5,7 @@ import { reportSyncIssue } from '@/app/(lane)/lane/actions';
 import { enqueueSale, listQueue, removeQueued, type QueuedSale } from './device';
 
 export type PostResult =
-  | { kind: 'ok'; data: { id: string; invoiceNo: string; totalCents: number; changeCents: number; receiptToken: string } }
+  | { kind: 'ok'; data: { id: string; invoiceNo: string; totalCents: number; changeCents: number; receiptToken: string; pointsEarned?: number; pointsRedeemed?: number } }
   | { kind: 'network' }
   | { kind: 'rejected'; code: string; message: string };
 

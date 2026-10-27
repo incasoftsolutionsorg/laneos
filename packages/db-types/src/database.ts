@@ -32,6 +32,10 @@ export type Database = {
         }
         Returns: string
       }
+      adjust_loyalty: {
+        Args: { p_customer: string; p_points: number; p_reason: string }
+        Returns: number
+      }
       adjust_stock: {
         Args: {
           p_item: string
@@ -46,6 +50,20 @@ export type Database = {
       admin_audit: {
         Args: { p_action?: string; p_before?: string; p_tenant?: string }
         Returns: Json
+      }
+      admin_create_tenant: {
+        Args: {
+          p_details?: Json
+          p_name: string
+          p_owner_email: string
+          p_owner_name: string
+          p_plan: string
+          p_shop_code: string
+          p_shop_name: string
+          p_slug: string
+          p_trial?: boolean
+        }
+        Returns: string
       }
       admin_end_support: { Args: { p_session: string }; Returns: undefined }
       admin_generate_invoices: { Args: { p_period: string }; Returns: number }
@@ -79,6 +97,15 @@ export type Database = {
         Args: { p: Json; p_tenant: string }
         Returns: undefined
       }
+      answer_supplier_return: {
+        Args: {
+          p_action: string
+          p_credit_cents?: number
+          p_note?: string
+          p_return: string
+        }
+        Returns: undefined
+      }
       apply_due_price_schedules: { Args: never; Returns: number }
       approve_damage: {
         Args: { p_approve: boolean; p_report: string }
@@ -93,6 +120,10 @@ export type Database = {
         Returns: undefined
       }
       cancel_price_schedule: { Args: { p_id: string }; Returns: undefined }
+      cash_out_credit_note: {
+        Args: { p_note: string; p_reason: string }
+        Returns: number
+      }
       cash_pickup: {
         Args: { p_amount_cents: number; p_note?: string; p_shift: string }
         Returns: string
@@ -119,6 +150,10 @@ export type Database = {
         Returns: undefined
       }
       create_sale: { Args: { p: Json }; Returns: Json }
+      create_supplier_return: {
+        Args: { p: Json; p_shop: string }
+        Returns: Json
+      }
       create_tenant: {
         Args: {
           p_details?: Json
@@ -168,6 +203,16 @@ export type Database = {
       }
       lane_cashiers: { Args: { p_lane: string }; Returns: Json }
       lane_catalog: { Args: { p_lane: string }; Returns: Json }
+      lane_change_pin: {
+        Args: {
+          p_key: string
+          p_lane: string
+          p_member: string
+          p_new: string
+          p_old: string
+        }
+        Returns: Json
+      }
       lane_lock: { Args: { p_lane: string }; Returns: undefined }
       lane_unlock: {
         Args: { p_key: string; p_lane: string; p_member: string; p_pin: string }
@@ -184,6 +229,11 @@ export type Database = {
         Returns: Json
       }
       list_sessions: { Args: { p_user?: string }; Returns: Json }
+      login_gate: { Args: { p_email: string }; Returns: Json }
+      login_record: {
+        Args: { p_email: string; p_ok: boolean }
+        Returns: undefined
+      }
       member_status: { Args: never; Returns: Json }
       open_shift: {
         Args: {
@@ -195,6 +245,15 @@ export type Database = {
         Returns: Json
       }
       pay_supplier: { Args: { p: Json; p_shop: string }; Returns: Json }
+      payhere_paid: {
+        Args: {
+          p_amount_cents: number
+          p_order: string
+          p_payment: string
+          p_status: number
+        }
+        Returns: string
+      }
       po_action: {
         Args: { p_action: string; p_po: string }
         Returns: undefined
@@ -237,6 +296,7 @@ export type Database = {
         Args: {
           p_item: string
           p_note?: string
+          p_photo?: string
           p_qty_milli: number
           p_reason: string
           p_shop: string
@@ -281,6 +341,11 @@ export type Database = {
       save_price_schedule: { Args: { p: Json }; Returns: string }
       save_promotion: { Args: { p: Json }; Returns: string }
       save_wholesale: { Args: { p: Json; p_shop: string }; Returns: Json }
+      set_item_image: {
+        Args: { p_item: string; p_path: string }
+        Returns: undefined
+      }
+      set_logo: { Args: { p_path: string }; Returns: undefined }
       set_marketing_consent: {
         Args: { p_consent: boolean; p_customer: string }
         Returns: undefined
@@ -1169,6 +1234,7 @@ export type Database = {
           created_by: string | null
           department_id: string | null
           id: string
+          image_path: string | null
           is_active: boolean
           is_pinned: boolean
           is_returnable: boolean
@@ -1192,6 +1258,7 @@ export type Database = {
           created_by?: string | null
           department_id?: string | null
           id?: string
+          image_path?: string | null
           is_active?: boolean
           is_pinned?: boolean
           is_returnable?: boolean
@@ -1215,6 +1282,7 @@ export type Database = {
           created_by?: string | null
           department_id?: string | null
           id?: string
+          image_path?: string | null
           is_active?: boolean
           is_pinned?: boolean
           is_returnable?: boolean
@@ -1402,6 +1470,137 @@ export type Database = {
           },
         ]
       }
+      login_attempts: {
+        Row: {
+          at: string
+          email_hash: string
+          id: string
+          ok: boolean
+        }
+        Insert: {
+          at?: string
+          email_hash: string
+          id?: string
+          ok: boolean
+        }
+        Update: {
+          at?: string
+          email_hash?: string
+          id?: string
+          ok?: boolean
+        }
+        Relationships: []
+      }
+      lookup_attempts: {
+        Row: {
+          at: string
+          id: string
+          kind: string
+          lane_id: string | null
+          ok: boolean
+          tenant_id: string | null
+        }
+        Insert: {
+          at?: string
+          id?: string
+          kind: string
+          lane_id?: string | null
+          ok: boolean
+          tenant_id?: string | null
+        }
+        Update: {
+          at?: string
+          id?: string
+          kind?: string
+          lane_id?: string | null
+          ok?: boolean
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lookup_attempts_lane_id_fkey"
+            columns: ["lane_id"]
+            isOneToOne: false
+            referencedRelation: "lanes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lookup_attempts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      loyalty_ledger: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          id: string
+          kind: Database["public"]["Enums"]["loyalty_kind"]
+          note: string | null
+          points: number
+          return_id: string | null
+          sale_id: string | null
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          customer_id: string
+          id?: string
+          kind: Database["public"]["Enums"]["loyalty_kind"]
+          note?: string | null
+          points: number
+          return_id?: string | null
+          sale_id?: string | null
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["loyalty_kind"]
+          note?: string | null
+          points?: number
+          return_id?: string | null
+          sale_id?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loyalty_ledger_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loyalty_ledger_return_id_fkey"
+            columns: ["return_id"]
+            isOneToOne: false
+            referencedRelation: "returns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loyalty_ledger_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loyalty_ledger_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       member_shops: {
         Row: {
           member_id: string
@@ -1460,6 +1659,7 @@ export type Database = {
           pin_failures: number
           pin_hash: string | null
           pin_locked_until: string | null
+          pin_set_at: string | null
           role_id: string
           staff_code: string | null
           tenant_id: string
@@ -1483,6 +1683,7 @@ export type Database = {
           pin_failures?: number
           pin_hash?: string | null
           pin_locked_until?: string | null
+          pin_set_at?: string | null
           role_id: string
           staff_code?: string | null
           tenant_id: string
@@ -1506,6 +1707,7 @@ export type Database = {
           pin_failures?: number
           pin_hash?: string | null
           pin_locked_until?: string | null
+          pin_set_at?: string | null
           role_id?: string
           staff_code?: string | null
           tenant_id?: string
@@ -1846,14 +2048,17 @@ export type Database = {
           buy_qty: number | null
           created_at: string
           created_by: string | null
+          discount_cents: number | null
           ends_at: string | null
           id: string
           is_active: boolean
           kind: Database["public"]["Enums"]["promotion_kind"]
+          members_only: boolean
           name: string
           percent_bp: number | null
           starts_at: string
           tenant_id: string
+          threshold_cents: number | null
           updated_at: string
         }
         Insert: {
@@ -1861,14 +2066,17 @@ export type Database = {
           buy_qty?: number | null
           created_at?: string
           created_by?: string | null
+          discount_cents?: number | null
           ends_at?: string | null
           id?: string
           is_active?: boolean
           kind: Database["public"]["Enums"]["promotion_kind"]
+          members_only?: boolean
           name: string
           percent_bp?: number | null
           starts_at?: string
           tenant_id: string
+          threshold_cents?: number | null
           updated_at?: string
         }
         Update: {
@@ -1876,14 +2084,17 @@ export type Database = {
           buy_qty?: number | null
           created_at?: string
           created_by?: string | null
+          discount_cents?: number | null
           ends_at?: string | null
           id?: string
           is_active?: boolean
           kind?: Database["public"]["Enums"]["promotion_kind"]
+          members_only?: boolean
           name?: string
           percent_bp?: number | null
           starts_at?: string
           tenant_id?: string
+          threshold_cents?: number | null
           updated_at?: string
         }
         Relationships: [
@@ -2466,6 +2677,8 @@ export type Database = {
       sales: {
         Row: {
           balance_due_cents: number
+          basket_promo_cents: number
+          basket_promotion_id: string | null
           change_cents: number
           client_uuid: string
           created_at: string
@@ -2476,6 +2689,8 @@ export type Database = {
           lane_id: string
           member_id: string
           paid_cents: number
+          points_earned: number
+          points_redeemed: number
           promo_cents: number
           receipt_token: string
           rounding_cents: number
@@ -2487,6 +2702,8 @@ export type Database = {
         }
         Insert: {
           balance_due_cents?: number
+          basket_promo_cents?: number
+          basket_promotion_id?: string | null
           change_cents?: number
           client_uuid: string
           created_at?: string
@@ -2497,6 +2714,8 @@ export type Database = {
           lane_id: string
           member_id: string
           paid_cents: number
+          points_earned?: number
+          points_redeemed?: number
           promo_cents?: number
           receipt_token?: string
           rounding_cents?: number
@@ -2508,6 +2727,8 @@ export type Database = {
         }
         Update: {
           balance_due_cents?: number
+          basket_promo_cents?: number
+          basket_promotion_id?: string | null
           change_cents?: number
           client_uuid?: string
           created_at?: string
@@ -2518,6 +2739,8 @@ export type Database = {
           lane_id?: string
           member_id?: string
           paid_cents?: number
+          points_earned?: number
+          points_redeemed?: number
           promo_cents?: number
           receipt_token?: string
           rounding_cents?: number
@@ -2528,6 +2751,13 @@ export type Database = {
           total_cents?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "sales_basket_promotion_id_fkey"
+            columns: ["basket_promotion_id"]
+            isOneToOne: false
+            referencedRelation: "promotions"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sales_customer_id_fkey"
             columns: ["customer_id"]
@@ -3333,6 +3563,151 @@ export type Database = {
           },
         ]
       }
+      supplier_return_lines: {
+        Row: {
+          damage_decision_id: string | null
+          damage_report_id: string | null
+          id: string
+          item_id: string
+          line_cents: number
+          qty_milli: number
+          return_id: string
+          tenant_id: string
+          unit_cost_cents: number
+        }
+        Insert: {
+          damage_decision_id?: string | null
+          damage_report_id?: string | null
+          id?: string
+          item_id: string
+          line_cents: number
+          qty_milli: number
+          return_id: string
+          tenant_id: string
+          unit_cost_cents: number
+        }
+        Update: {
+          damage_decision_id?: string | null
+          damage_report_id?: string | null
+          id?: string
+          item_id?: string
+          line_cents?: number
+          qty_milli?: number
+          return_id?: string
+          tenant_id?: string
+          unit_cost_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_return_lines_damage_decision_id_fkey"
+            columns: ["damage_decision_id"]
+            isOneToOne: false
+            referencedRelation: "damage_decisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_return_lines_damage_report_id_fkey"
+            columns: ["damage_report_id"]
+            isOneToOne: false
+            referencedRelation: "damage_reports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_return_lines_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_return_lines_return_id_fkey"
+            columns: ["return_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_returns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_return_lines_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supplier_returns: {
+        Row: {
+          answer_note: string | null
+          answered_at: string | null
+          answered_by: string | null
+          created_at: string
+          created_by: string
+          credit_cents: number | null
+          id: string
+          note: string | null
+          return_no: string
+          shop_id: string
+          status: Database["public"]["Enums"]["supplier_return_status"]
+          supplier_id: string
+          tenant_id: string
+          value_cents: number
+        }
+        Insert: {
+          answer_note?: string | null
+          answered_at?: string | null
+          answered_by?: string | null
+          created_at?: string
+          created_by: string
+          credit_cents?: number | null
+          id?: string
+          note?: string | null
+          return_no: string
+          shop_id: string
+          status?: Database["public"]["Enums"]["supplier_return_status"]
+          supplier_id: string
+          tenant_id: string
+          value_cents: number
+        }
+        Update: {
+          answer_note?: string | null
+          answered_at?: string | null
+          answered_by?: string | null
+          created_at?: string
+          created_by?: string
+          credit_cents?: number | null
+          id?: string
+          note?: string | null
+          return_no?: string
+          shop_id?: string
+          status?: Database["public"]["Enums"]["supplier_return_status"]
+          supplier_id?: string
+          tenant_id?: string
+          value_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_returns_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shops"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_returns_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_returns_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       suppliers: {
         Row: {
           balance_due_cents: number
@@ -3664,6 +4039,11 @@ export type Database = {
           idle_timeout_min: number
           lane_lock_min: number
           login_alerts: boolean
+          logo_path: string | null
+          loyalty_enabled: boolean
+          loyalty_min_redeem: number
+          loyalty_point_value_cents: number
+          loyalty_spend_cents: number
           name: string
           next_charge_on: string | null
           pin_change_days: number | null
@@ -3713,6 +4093,11 @@ export type Database = {
           idle_timeout_min?: number
           lane_lock_min?: number
           login_alerts?: boolean
+          logo_path?: string | null
+          loyalty_enabled?: boolean
+          loyalty_min_redeem?: number
+          loyalty_point_value_cents?: number
+          loyalty_spend_cents?: number
           name: string
           next_charge_on?: string | null
           pin_change_days?: number | null
@@ -3762,6 +4147,11 @@ export type Database = {
           idle_timeout_min?: number
           lane_lock_min?: number
           login_alerts?: boolean
+          logo_path?: string | null
+          loyalty_enabled?: boolean
+          loyalty_min_redeem?: number
+          loyalty_point_value_cents?: number
+          loyalty_spend_cents?: number
           name?: string
           next_charge_on?: string | null
           pin_change_days?: number | null
@@ -4225,6 +4615,7 @@ export type Database = {
         | "reduced"
         | "manual"
       lane_status: "active" | "disabled"
+      loyalty_kind: "earn" | "redeem" | "reverse" | "adjust"
       movement_reason:
         | "opening"
         | "sale"
@@ -4236,7 +4627,13 @@ export type Database = {
         | "transfer_in"
         | "transfer_out"
         | "count"
-      payment_method: "cash" | "card" | "lankaqr" | "credit_note" | "account"
+      payment_method:
+        | "cash"
+        | "card"
+        | "lankaqr"
+        | "credit_note"
+        | "account"
+        | "loyalty"
       po_status:
         | "draft"
         | "sent"
@@ -4244,7 +4641,7 @@ export type Database = {
         | "received"
         | "cancelled"
       price_schedule_status: "scheduled" | "applied" | "cancelled"
-      promotion_kind: "multi_buy" | "percent_off"
+      promotion_kind: "multi_buy" | "percent_off" | "mix_match" | "threshold"
       reset_scope: "user" | "lane" | "shop" | "tenant" | "platform"
       restock_action: "sellable" | "damaged"
       return_reason:
@@ -4265,6 +4662,7 @@ export type Database = {
       supplier_ledger_kind: "grn" | "payment" | "return" | "adjustment"
       supplier_payment_method: "cash" | "bank_transfer" | "cheque"
       supplier_payment_status: "pending_approval" | "paid" | "rejected"
+      supplier_return_status: "sent" | "credited" | "rejected"
       sync_issue_status: "open" | "resolved" | "discarded"
       tax_class: "standard" | "exempt" | "zero"
       tenant_status: "trial" | "active" | "past_due" | "suspended" | "cancelled"
@@ -4459,6 +4857,7 @@ export const Constants = {
         "manual",
       ],
       lane_status: ["active", "disabled"],
+      loyalty_kind: ["earn", "redeem", "reverse", "adjust"],
       movement_reason: [
         "opening",
         "sale",
@@ -4471,7 +4870,14 @@ export const Constants = {
         "transfer_out",
         "count",
       ],
-      payment_method: ["cash", "card", "lankaqr", "credit_note", "account"],
+      payment_method: [
+        "cash",
+        "card",
+        "lankaqr",
+        "credit_note",
+        "account",
+        "loyalty",
+      ],
       po_status: [
         "draft",
         "sent",
@@ -4480,7 +4886,7 @@ export const Constants = {
         "cancelled",
       ],
       price_schedule_status: ["scheduled", "applied", "cancelled"],
-      promotion_kind: ["multi_buy", "percent_off"],
+      promotion_kind: ["multi_buy", "percent_off", "mix_match", "threshold"],
       reset_scope: ["user", "lane", "shop", "tenant", "platform"],
       restock_action: ["sellable", "damaged"],
       return_reason: [
@@ -4503,6 +4909,7 @@ export const Constants = {
       supplier_ledger_kind: ["grn", "payment", "return", "adjustment"],
       supplier_payment_method: ["cash", "bank_transfer", "cheque"],
       supplier_payment_status: ["pending_approval", "paid", "rejected"],
+      supplier_return_status: ["sent", "credited", "rejected"],
       sync_issue_status: ["open", "resolved", "discarded"],
       tax_class: ["standard", "exempt", "zero"],
       tenant_status: ["trial", "active", "past_due", "suspended", "cancelled"],

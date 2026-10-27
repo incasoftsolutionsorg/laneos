@@ -24,12 +24,15 @@ export interface CatalogItem {
 export interface CatalogPromotion {
   id: string;
   name: string;
-  kind: 'multi_buy' | 'percent_off';
+  kind: 'multi_buy' | 'percent_off' | 'mix_match' | 'threshold';
   buyQty: number | null;
   bundlePriceCents: number | null;
   percentBp: number | null;
   itemIds: string[];
   endsAt?: string | null;
+  thresholdCents?: number | null;
+  discountCents?: number | null;
+  membersOnly?: boolean;
 }
 
 /** Shape returned by api.lane_catalog. */
@@ -37,7 +40,10 @@ export interface LaneCatalog {
   lane: { id: string; code: string; name: string; status: string; registered: boolean };
   activeMember: { id: string; name: string } | null;
   shop: { id: string; code: string; name: string };
-  tenant: { name: string; roundingUnitCents: number; embeddedBarcodeMode: EmbeddedMode; catalogVersion: number };
+  tenant: {
+    name: string; roundingUnitCents: number; embeddedBarcodeMode: EmbeddedMode; catalogVersion: number;
+    loyalty?: { enabled: boolean; spendCents: number; pointValueCents: number; minRedeem: number };
+  };
   shift: {
     id: string; shiftNo: number; openedAt: string; cashier: string;
     reservedFrom: number | null; reservedTo: number | null; nextReserved: number | null;
@@ -139,11 +145,13 @@ export function toBasket(cart: CartLine[], index: CatalogIndex): BasketLine[] {
 
 export function toPromotions(promotions: CatalogPromotion[]): Promotion[] {
   return promotions.flatMap((p): Promotion[] => {
-    if (p.kind === 'multi_buy' && p.buyQty && p.bundlePriceCents != null) {
-      return [{ id: p.id, kind: 'multi_buy', itemIds: p.itemIds, buyQty: p.buyQty, bundlePriceCents: p.bundlePriceCents, name: p.name }];
+    const base = { id: p.id, itemIds: p.itemIds, name: p.name, membersOnly: !!p.membersOnly };
+    if ((p.kind === 'multi_buy' || p.kind === 'mix_match') && p.buyQty && p.bundlePriceCents != null) {
+      return [{ ...base, kind: p.kind, buyQty: p.buyQty, bundlePriceCents: p.bundlePriceCents }];
     }
-    if (p.kind === 'percent_off' && p.percentBp) {
-      return [{ id: p.id, kind: 'percent_off', itemIds: p.itemIds, percentBp: p.percentBp, name: p.name }];
+    if (p.kind === 'percent_off' && p.percentBp) return [{ ...base, kind: 'percent_off', percentBp: p.percentBp }];
+    if (p.kind === 'threshold' && p.thresholdCents) {
+      return [{ ...base, kind: 'threshold', thresholdCents: p.thresholdCents, discountCents: p.discountCents ?? null, percentBp: p.percentBp ?? null }];
     }
     return [];
   });

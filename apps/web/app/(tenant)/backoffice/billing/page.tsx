@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
 import { formatRs, hasPerm } from '@laneos/core';
-import { Alert, Badge, Button, Card, CardTitle, EmptyRow, PageHeader, Table, TD, TH } from '@laneos/ui';
+import { Alert, Badge, Card, CardTitle, EmptyRow, PageHeader, Table, TD, TH } from '@laneos/ui';
+import { PayHereButton } from '@/components/backoffice/PayHereButton';
 import { PlanPicker } from '@/components/backoffice/PlanPicker';
+import { payhereConfig } from '@/lib/payhere';
 import { colomboToday, fmtDate } from '@/lib/server/dates';
 import { requireTenant } from '@/lib/server/context';
 
@@ -10,8 +12,10 @@ export const metadata: Metadata = { title: 'Plan & billing' };
 const DAY = 86_400_000;
 const month = (d: string) => new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric' }).format(new Date(`${d}T00:00:00+05:30`));
 
-// Plan & billing (Figma 11-4771). Online payment waits for PayHere merchant credentials.
-export default async function BillingPage() {
+// Plan & billing (Figma 11-4771). "Pay with PayHere" pays the oldest open invoice once PAYHERE_* is configured;
+// PayHere then confirms the payment to /api/payhere/notify, which marks the invoice paid.
+export default async function BillingPage({ searchParams }: { searchParams: Promise<{ paid?: string }> }) {
+  const { paid } = await searchParams;
   const ctx = await requireTenant();
   const today = colomboToday();
   const [{ data: t }, { data: plans }, { data: invoices }, { count: lanes }, { count: staff }, { count: shops }] = await Promise.all([
@@ -32,16 +36,18 @@ export default async function BillingPage() {
   const owner = hasPerm(ctx.member.perms, 'settings.manage');
   const list = plans ?? [];
   const next = list[list.findIndex((p) => p.id === plan.id) + 1];
+  const payable = (invoices ?? []).filter((i) => i.status === 'open').at(-1);
 
   return (
     <>
+      {paid ? <Alert tone="success">Thank you. Your invoice is marked paid as soon as PayHere confirms the payment, usually within a minute.</Alert> : null}
       {worst ? (
         <Alert tone="warning">Your subscription payment is {daysLate} day{daysLate === 1 ? '' : 's'} overdue. If it stays unpaid the account can be suspended: lanes stop selling, but you can still view and export data.</Alert>
       ) : null}
       <PageHeader
         title="Plan & billing"
         subtitle={`${plan.name} · ${formatRs(monthly, { decimals: 0 })} / month${plan.per_shop ? ` (${shops} shop${shops === 1 ? '' : 's'})` : ''}`}
-        actions={<Button disabled title="Online payment opens once LaneOS's PayHere merchant account is connected">Pay with PayHere</Button>}
+        actions={owner ? <PayHereButton invoiceId={payable?.id ?? null} enabled={!!payhereConfig()} label={payable ? `Pay ${formatRs(payable.amount_cents, { decimals: 0 })} with PayHere` : 'Pay with PayHere'} /> : null}
       />
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
         <Card className="flex flex-col gap-3 p-5 xl:w-[300px] xl:shrink-0">

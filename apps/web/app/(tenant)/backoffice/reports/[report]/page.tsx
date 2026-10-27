@@ -7,7 +7,7 @@ import { DailyBars } from '@/components/backoffice/reports/DailyBars';
 import { RangePicker } from '@/components/backoffice/reports/RangePicker';
 import {
   REPORT_TABS, formatCell, loadReport, readRange, reportTable,
-  type DamageData, type NotesData, type ReportKey, type SalesData, type TaxData,
+  type DamageData, type ExpiryData, type NotesData, type PromoRow, type ReportKey, type SalesData, type ShrinkData, type TaxData,
 } from '@/lib/reports';
 import { fmtDateTime } from '@/lib/server/dates';
 import { requireTenant } from '@/lib/server/context';
@@ -48,6 +48,9 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
 
       {key === 'sales' ? <SalesSummary d={data as SalesData} /> : null}
       {key === 'damage' ? <Stats items={[['Damage value', (data as DamageData).byReason.reduce((s, r) => s + r.value, 0)], ['Wastage written off', (data as DamageData).wastage]]} extra={`${(data as DamageData).pending} damage reports waiting for a decision`} /> : null}
+      {key === 'shrinkage' ? <Stats items={[['Missing at counts', (data as ShrinkData).loss], ['Found extra', (data as ShrinkData).gain], ['Net', (data as ShrinkData).gain - (data as ShrinkData).loss]]} extra="Differences posted by stock counts, at cost" /> : null}
+      {key === 'expiry' ? <Stats items={[['Expired stock lost', (data as ExpiryData).value]]} extra="Written off from Expiry, or reported as damaged with reason “expired”" /> : null}
+      {key === 'promotions' ? <Stats items={[['Discount given', (data as PromoRow[]).reduce((s, r) => s + r.discount, 0)], ['Sales on promotion', (data as PromoRow[]).reduce((s, r) => s + r.sales, 0)]]} extra="Spend-X deals count whole bills" /> : null}
       {key === 'credit-notes' ? <Stats items={[['Issued', (data as NotesData).issued], ['Redeemed', (data as NotesData).redeemed], ['Outstanding', (data as NotesData).outstanding]]} extra={`${(data as NotesData).issuedCount} credit notes issued in the period`} /> : null}
       {key === 'tax' && !(data as TaxData).registered ? <p className="text-[13px] text-text-muted">Not VAT registered — sales are shown by tax class without VAT. Turn on VAT in Settings → Tax &amp; rates.</p> : null}
       {key === 'tax' && (data as TaxData).registered ? <p className="text-[13px] text-text-muted">VAT reg. no {(data as TaxData).vatNo ?? '—'} · prices {(data as TaxData).included ? 'include' : 'exclude'} VAT · rate in force on the last day of the range.</p> : null}

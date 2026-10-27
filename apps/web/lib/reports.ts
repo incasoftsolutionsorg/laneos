@@ -9,7 +9,8 @@ import { colomboToday } from '@/lib/server/dates';
 type Ctx = Awaited<ReturnType<typeof requireTenant>>;
 
 export const REPORT_TABS = {
-  sales: 'Sales', margin: 'Margin', items: 'Items', stock: 'Stock', damage: 'Damage & wastage', 'credit-notes': 'Credit notes', tax: 'Tax',
+  sales: 'Sales', margin: 'Margin', items: 'Items', stock: 'Stock', damage: 'Damage & wastage', shrinkage: 'Shrinkage', expiry: 'Expiry',
+  promotions: 'Promotions', 'credit-notes': 'Credit notes', tax: 'Tax',
 } as const;
 export type ReportKey = keyof typeof REPORT_TABS;
 
@@ -20,6 +21,7 @@ const REASON: Record<string, string> = {
   broken: 'Broken', leaking: 'Leaking', crushed: 'Crushed', pest: 'Pests', expired: 'Expired', temperature: 'Temperature (cold chain)', other: 'Other',
 };
 const CLASS: Record<string, string> = { standard: 'Standard', exempt: 'Exempt', zero: 'Zero rated' };
+const PROMO_KIND: Record<string, string> = { multi_buy: 'Multi-buy', mix_match: 'Mix & match', percent_off: 'Item discount', threshold: 'Spend X' };
 
 /** "from"/"to" from the URL, or this month so far (Colombo days). */
 export function readRange(from?: string, to?: string) {
@@ -78,6 +80,28 @@ export function reportTable(key: ReportKey, data: unknown): ReportTable {
         rows: d.byReason.map((r) => [REASON[r.reason] ?? r.reason, r.reports, r.qtyMilli, r.value]),
       };
     }
+    case 'shrinkage': {
+      const d = data as ShrinkData;
+      return {
+        cols: [{ label: 'Item', kind: 'text' }, { label: 'Department', kind: 'text' }, { label: 'Count difference', kind: 'qty' }, { label: 'Value (cost)', kind: 'money' }],
+        rows: d.rows.map((r) => [r.name, r.department, r.qtyMilli, r.value]),
+      };
+    }
+    case 'expiry': {
+      const d = data as ExpiryData;
+      return {
+        cols: [{ label: 'Item', kind: 'text' }, { label: 'How', kind: 'text' }, { label: 'Quantity', kind: 'qty' }, { label: 'Value (cost)', kind: 'money' }],
+        rows: d.rows.map((r) => [r.name, r.source, r.qtyMilli, r.value]),
+      };
+    }
+    case 'promotions': {
+      const rows = data as PromoRow[];
+      return {
+        cols: [{ label: 'Promotion', kind: 'text' }, { label: 'Type', kind: 'text' }, { label: 'Bills', kind: 'int' }, { label: 'Units', kind: 'qty' },
+          { label: 'Sales', kind: 'money' }, { label: 'Discount given', kind: 'money' }, { label: 'Margin left', kind: 'money' }],
+        rows: rows.map((r) => [r.name, PROMO_KIND[r.kind] ?? r.kind, r.bills, r.qtyMilli, r.sales, r.discount, r.margin]),
+      };
+    }
     case 'credit-notes': {
       const d = data as NotesData;
       return {
@@ -123,5 +147,8 @@ export interface SalesData {
 export interface ItemRow { itemId: string; name: string; qtyMilli: number; sales: number; cost: number; bills: number; promo: number; lastSold: string }
 export interface StockRow { name: string; items: number; value: number; damagedValue: number; low: number; negative: number }
 export interface DamageData { byReason: { reason: string; reports: number; qtyMilli: number; value: number }[]; wastage: number; pending: number }
+export interface ShrinkData { loss: number; gain: number; rows: { itemId: string; name: string; department: string; qtyMilli: number; value: number }[] }
+export interface ExpiryData { value: number; rows: { itemId: string; name: string; qtyMilli: number; value: number; source: string }[] }
+export interface PromoRow { id: string; name: string; kind: string; bills: number; qtyMilli: number | null; sales: number; discount: number; margin: number | null }
 export interface NotesData { issued: number; issuedCount: number; redeemed: number; outstanding: number; expired: number }
 export interface TaxData { registered: boolean; vatNo: string | null; included: boolean; rows: { taxClass: string; rateBp: number; sales: number; vat: number }[] }

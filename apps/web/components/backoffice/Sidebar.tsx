@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Avatar, Logo, cn } from '@laneos/ui';
 import { switchShop } from '@/app/(tenant)/backoffice/shop-actions';
+import { clearLaneCache } from '@/components/lane/LaneServiceWorker';
 
 interface NavItem { label: string; href: string; icon: LucideIcon; match?: string[] }
 
@@ -23,7 +24,7 @@ const NAV: NavItem[] = [
   { label: 'Returns', href: '/backoffice/credit-notes', icon: Undo2 },
   { label: 'Refunds', href: '/backoffice/refunds', icon: DollarSign },
   { label: 'Customers & credit', href: '/backoffice/customers', icon: Users },
-  { label: 'Reports', href: '/backoffice/reports/sales', icon: ChartColumn, match: ['margin', 'items', 'stock', 'damage', 'credit-notes', 'tax'].map((k) => `/backoffice/reports/${k}`) },
+  { label: 'Reports', href: '/backoffice/reports/sales', icon: ChartColumn, match: ['margin', 'items', 'stock', 'damage', 'shrinkage', 'expiry', 'promotions', 'credit-notes', 'tax'].map((k) => `/backoffice/reports/${k}`) },
   { label: 'Shifts & cash', href: '/backoffice/reports/shifts', icon: Clock },
   { label: 'Users & roles', href: '/backoffice/staff', icon: Shield },
   { label: 'Settings', href: '/backoffice/settings', icon: Settings, match: ['/backoffice/lanes', '/backoffice/promotions', '/backoffice/billing', '/backoffice/profile', '/backoffice/support'] },
@@ -52,7 +53,7 @@ function isActive(path: string, item: NavItem) {
 }
 
 export function Sidebar({
-  tenantName, shopLabel, userName, roleName, active, shops, shopId, chain,
+  tenantName, shopLabel, userName, roleName, active, shops, shopId, chain, logoUrl,
 }: {
   tenantName: string; shopLabel: string; userName: string; roleName: string;
   perms?: number; multiShop?: boolean;
@@ -62,6 +63,8 @@ export function Sidebar({
   shopId?: string;
   /** Head office is available (more than one shop allowed). */
   chain?: boolean;
+  /** The shop's own logo (Settings → Branding); the LaneOS mark otherwise. */
+  logoUrl?: string | null;
 }) {
   const pathname = usePathname();
   const path = active ?? pathname;
@@ -70,7 +73,8 @@ export function Sidebar({
   return (
     <nav className="sticky top-0 flex h-screen w-[248px] shrink-0 flex-col gap-0.5 overflow-y-auto bg-sidebar p-4" aria-label="Back office">
       <div className="mb-2.5 flex items-center gap-2.5 p-2">
-        <Logo />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {logoUrl ? <img src={logoUrl} alt="" className="size-[34px] shrink-0 rounded-control bg-white object-contain p-0.5" /> : <Logo />}
         <div className="min-w-0">
           <p className="truncate text-sm font-bold text-white">{tenantName}</p>
           <p className="truncate text-[11px] text-sidebar-muted">{inChain ? `Head office · ${shops?.length ?? 1} shops` : shopLabel}</p>
@@ -125,7 +129,7 @@ export function Sidebar({
             <p className="truncate text-[11px] text-sidebar-muted">{roleName}{inChain ? ' · Head office' : ''}</p>
           </div>
         </Link>
-        <form action="/auth/signout" method="post">
+        <form action="/auth/signout" method="post" onSubmit={clearLaneCache}>
           <button type="submit" className="rounded p-1 text-sidebar-muted hover:text-white" aria-label="Sign out" title="Sign out">
             <LogOut size={16} aria-hidden />
           </button>

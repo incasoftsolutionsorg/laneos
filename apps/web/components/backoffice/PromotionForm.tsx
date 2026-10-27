@@ -6,8 +6,13 @@ import { formatRs } from '@laneos/core';
 import { Alert, Button, Card, CardTitle, Field, Input, buttonClass, cn, inputClass, tabClass, tabsClass } from '@laneos/ui';
 import { savePromotion, type PromoFormState } from '@/app/(tenant)/backoffice/promotions/actions';
 
+type Kind = 'multi_buy' | 'percent_off' | 'mix_match' | 'threshold';
+
+const KINDS: [Kind, string][] = [['multi_buy', 'Multi-buy'], ['mix_match', 'Mix & match'], ['percent_off', 'Item discount'], ['threshold', 'Spend X']];
+
 export interface PromoValues {
-  id?: string; name: string; kind: 'multi_buy' | 'percent_off'; buyQty: string; bundlePrice: string; percent: string;
+  id?: string; name: string; kind: Kind; buyQty: string; bundlePrice: string; percent: string;
+  threshold?: string; discount?: string; membersOnly?: boolean;
   startsOn: string; endsOn: string; isActive: boolean; itemIds: string[];
 }
 
@@ -34,13 +39,20 @@ export function PromotionForm({ values, items }: { values: PromoValues; items: {
         <CardTitle>Promotion</CardTitle>
         <Field label="Name on receipt and display"><Input name="name" defaultValue={values.name} required maxLength={80} placeholder="3 Prima breads for Rs 450" /></Field>
         <div className={tabsClass()} role="tablist" aria-label="Type">
-          <button type="button" role="tab" aria-selected={kind === 'multi_buy'} className={tabClass(kind === 'multi_buy')} onClick={() => setKind('multi_buy')}>Multi-buy</button>
-          <button type="button" role="tab" aria-selected={kind === 'percent_off'} className={tabClass(kind === 'percent_off')} onClick={() => setKind('percent_off')}>Item discount</button>
+          {KINDS.map(([k, t]) => (
+            <button key={k} type="button" role="tab" aria-selected={kind === k} className={tabClass(kind === k)} onClick={() => setKind(k)}>{t}</button>
+          ))}
         </div>
-        {kind === 'multi_buy' ? (
+        {kind === 'multi_buy' || kind === 'mix_match' ? (
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Buy" hint="Pieces of the same item"><Input name="buyQty" type="number" min={2} max={100} defaultValue={values.buyQty || '3'} /></Field>
+            <Field label="Buy" hint={kind === 'mix_match' ? 'Pieces of any of the chosen items' : 'Pieces of the same item'}><Input name="buyQty" type="number" min={2} max={100} defaultValue={values.buyQty || '3'} /></Field>
             <Field label="For (Rs)" hint="Price of the whole group"><Input name="bundlePrice" defaultValue={values.bundlePrice} inputMode="decimal" placeholder="450.00" /></Field>
+          </div>
+        ) : kind === 'threshold' ? (
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label="When the bill reaches (Rs)" hint="After item promotions"><Input name="threshold" defaultValue={values.threshold} inputMode="decimal" placeholder="5000" /></Field>
+            <Field label="Rupees off" hint="Either this"><Input name="discount" defaultValue={values.discount} inputMode="decimal" placeholder="250" /></Field>
+            <Field label="or % off" hint="or this"><Input name="percent" type="number" min={0.01} max={100} step="0.01" defaultValue={values.percent} /></Field>
           </div>
         ) : (
           <Field label="Discount (%)" hint="Off each chosen item"><Input name="percent" type="number" min={0.01} max={100} step="0.01" defaultValue={values.percent || '5'} className="sm:w-48" /></Field>
@@ -52,10 +64,14 @@ export function PromotionForm({ values, items }: { values: PromoValues; items: {
             <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} className="size-4 accent-brand-primary" /> Active
           </label>
         </div>
-        <p className="text-xs text-text-muted">When several promotions cover an item, the customer gets the single best one (BR-021).</p>
+        <label className="flex items-center gap-2 text-[13px]">
+          <input type="checkbox" name="membersOnly" defaultChecked={values.membersOnly} className="size-4 accent-brand-primary" />
+          Loyalty members only (a customer must be on the bill)
+        </label>
+        <p className="text-xs text-text-muted">Promotions never stack: each item gets its single best deal, mix-and-match replaces item deals only when it saves more, and one spend-X discount applies to the bill (BR-021).</p>
       </Card>
 
-      <Card className="flex flex-col gap-3 p-5">
+      {kind === 'threshold' ? null : <Card className="flex flex-col gap-3 p-5">
         <div className="flex items-center justify-between gap-3">
           <CardTitle>Items · {chosen.size} chosen</CardTitle>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search items" aria-label="Search items" className={cn(inputClass, 'max-w-xs py-2')} />
@@ -72,7 +88,7 @@ export function PromotionForm({ values, items }: { values: PromoValues; items: {
             </li>
           ))}
         </ul>
-      </Card>
+      </Card>}
 
       <div className="flex gap-3">
         <Button type="submit" disabled={pending}>{pending ? 'Saving…' : values.id ? 'Save promotion' : 'Create promotion'}</Button>

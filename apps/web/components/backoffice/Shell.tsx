@@ -1,6 +1,7 @@
 import { activeSeason, brandStyle } from '@laneos/ui';
 import { IdleSignout } from '@/components/backoffice/IdleSignout';
 import { Sidebar } from '@/components/backoffice/Sidebar';
+import { publicUrl } from '@/lib/storage';
 import type { requireTenant } from '@/lib/server/context';
 
 type Ctx = Awaited<ReturnType<typeof requireTenant>>;
@@ -18,6 +19,7 @@ export function BackofficeShell({ ctx, active, children }: { ctx: Ctx; active?: 
         perms={ctx.member.perms}
         multiShop={ctx.shops.length > 1}
         shops={ctx.shops}
+        logoUrl={publicUrl(ctx.tenant.logo_path)}
         shopId={ctx.shop.id}
         chain={(ctx.tenant.entitlements?.max_shops ?? 1) > 1 || ctx.shops.length > 1}
         active={active}

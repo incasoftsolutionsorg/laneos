@@ -17,6 +17,16 @@ export async function saveSettings(patch: Record<string, string | number | boole
   return { ok: 'Settings saved.' };
 }
 
+/** Shop logo (Settings → Branding): the file is already in Storage; this records the path (or clears it). */
+export async function setLogo(path: string | null): Promise<string | null> {
+  const ctx = await requireTenant('settings.manage');
+  const { error } = await ctx.supabase.schema('api').rpc('set_logo', { p_path: path as string });
+  if (error) return dbErrorText(error);
+  revalidatePath('/backoffice', 'layout');
+  revalidatePath('/lane', 'layout');
+  return null;
+}
+
 export async function saveShop(v: { name: string; address: string; phone: string }): Promise<SettingsResult> {
   const ctx = await requireTenant('settings.manage');
   // Shops may have a landline (081 …) as well as a mobile, so accept any 9-digit Sri Lankan number.
