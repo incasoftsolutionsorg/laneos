@@ -85,6 +85,9 @@ const pages = [
   ['/admin', cookie, '', 307],
   ['/admin/login', null, 'Platform admin'],
   ['/register', null, 'Create your shop account'],
+  ['/forgot-password', null, 'Reset your password'],
+  ['/reset-password', null, 'Choose a new password'],
+  ['/lane/locked', cookie, 'Lane locked'],
   ['/auth/confirm', null, 'Signing you in'],
   ['/lane-sw.js', null, 'laneos-lane-pages'],
   ['/backoffice/settings/branding', cookie, 'Upload new logo'],
@@ -129,9 +132,13 @@ let failed = 0;
 for (const [path, c, expect, status = 200] of pages) {
   const res = await fetch(base + path, { headers: c ? { cookie: c } : {}, redirect: 'manual' });
   const body = res.status === 200 ? await res.text() : '';
-  const ok = res.status === status && body.includes(expect);
+  // Every script must carry the CSP nonce, or the browser blocks it and the page stays blank
+  // (a page prerendered at build time has no nonce).
+  const nonce = res.headers.get('content-security-policy')?.match(/'nonce-([^']+)'/)?.[1];
+  const blocked = (body.match(/<script\b[^>]*>/g) ?? []).filter((tag) => !tag.includes(`nonce="${nonce}"`)).length;
+  const ok = res.status === status && body.includes(expect) && blocked === 0;
   if (!ok) failed++;
-  console.log(`${ok ? 'ok  ' : 'FAIL'} ${res.status} ${path}${ok ? '' : `  (expected "${expect}")`}`);
+  console.log(`${ok ? 'ok  ' : 'FAIL'} ${res.status} ${path}${ok ? '' : blocked ? `  (${blocked} script(s) without the CSP nonce)` : `  (expected "${expect}")`}`);
 }
 
 const anon = await fetch(base + '/backoffice', { redirect: 'manual' });
