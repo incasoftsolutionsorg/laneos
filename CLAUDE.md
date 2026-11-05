@@ -5,7 +5,7 @@ Monorepo: `apps/web` (Next.js 16, App Router), `packages/*` (core, barcode, pric
 ## Database changes — always, in the same change
 
 1. New migration file in `supabase/migrations/` (`pnpm exec supabase migration new <name>`). Never edit a migration that has been pushed; add a fix migration instead.
-2. Every new table: RLS enabled **and forced**, policies via `app.tenant_id()` / `app.can_shop()` / `app.has_perm()`, and revoke writes `authenticated` must not have.
+2. Every new table: RLS enabled **and forced**, policies via `app.tenant_id()` / `app.shop_ids()` / `app.has_perm()`, and revoke writes `authenticated` must not have. Shop check: `shop_id = any ((select app.shop_ids())::uuid[])`, never `(select app.can_shop(shop_id))` (it runs once per row).
 3. Functions: `set search_path = ''`, and always write a WHERE clause on UPDATE/DELETE (Supabase's pg-safeupdate rejects them otherwise, even on temp tables).
 4. **Update `docs/08-data-model.md`**: table catalogue (§3), functions (§5), deviations (§6), migration log (§7), version line. `scripts/test/data-model-doc.test.ts` fails if a table or migration is missing.
 5. `pnpm db:push`, then `pnpm db:types`, then `pnpm test` and `pnpm test:db`.

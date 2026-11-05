@@ -5,7 +5,7 @@
 | Field | Value | Field | Value |
 | --- | --- | --- | --- |
 | **Document ID** | DOC-08 | **Owner** | Tech Lead (P1) |
-| **Version / Date** | v0.11 / 2026-10-27 | **Status** | Draft — matches the staging database |
+| **Version / Date** | v0.12 / 2026-11-05 | **Status** | Draft — matches the staging database |
 | **Database** | Supabase project `ciwuznyiimaxlxmqhvgr` (staging), PostgreSQL 17 | **Source of truth** | `supabase/migrations/*.sql` |
 
 > **Keep this file in step with the database.** Every PR that adds a migration updates this file in the same PR: the table catalogue (§3), the functions (§5) and the migration log (§7). The unit test `scripts/test/data-model-doc.test.ts` fails if a table or migration is missing here.
@@ -379,11 +379,11 @@ Append-only. `ticket_id` → `support_tickets`, `tenant_id`, `author_id`, `is_st
 | `app.tenant_id()` | the caller's tenant: JWT claim `tenant_id`, else a lookup in `members` |
 | `app.member_id()` | the caller's member id |
 | `app.permissions()` / `app.has_perm(key)` / `app.require_perm(key)` | permission mask / check / raise `FORBIDDEN` |
-| `app.shop_ids()` / `app.can_shop(shop)` | shops the caller may access |
+| `app.shop_ids()` / `app.can_shop(shop)` | shops the caller may access. In policies use `shop_id = any ((select app.shop_ids())::uuid[])`; `can_shop(column)` runs once per row |
 | `app.is_platform_admin()` | whether the caller is LaneOS staff |
 | `app.audit(action, entity, id, data)` | writes an `audit_log` row |
 
-**Policy pattern.** Tenant tables: `tenant_id = (select app.tenant_id())`. Shop tables: the same plus `(select app.can_shop(shop_id))`. Writes to master data also require a permission. Financial tables have **no write policies** and INSERT/UPDATE/DELETE are revoked from `authenticated`. They are written only by `api.*` functions. `anon` has no rights on any table.
+**Policy pattern.** Tenant tables: `tenant_id = (select app.tenant_id())`. Shop tables: the same plus `shop_id = any ((select app.shop_ids())::uuid[])`. The shop list is built once per query; `(select app.can_shop(shop_id))` passes a row column, so it ran once per row (≈0.35 s for 500 stock-count lines) and was replaced in every policy by 20261105185921. Writes to master data also require a permission. Financial tables have **no write policies** and INSERT/UPDATE/DELETE are revoked from `authenticated`. They are written only by `api.*` functions. `anon` has no rights on any table.
 
 **Hidden columns.** `members.pin_hash` and `lanes.key_hash` are not readable through the API (column-level grants, migration 20261023090100); use `members.has_pin` and `lanes.registered_at`. Any function that runs as the caller must name its columns instead of `select *` on these two tables.
 
@@ -559,6 +559,7 @@ Conventions follow blueprint §22.1. These differ from the blueprint for now and
 | `20261027090800_fix_credit_note_lock_window.sql` | `api.check_credit_note` v3: only wrong codes from the last 5 minutes count toward the lock (before, old failures re-locked a lane after one new wrong code) |
 | `20261027090900_billing_automation.sql` | `app.generate_invoices` (shared by `api.admin_generate_invoices`), `app.billing_tick` + cron `laneos-billing-tick` (invoices on the 1st, past due, suspended after 14 days), `api.payhere_paid` (service role) |
 | `20261027092340_fix_invoice_generation.sql` | Invoice run created nothing (trials have MRR 0 and never ended; old trials had no end date): backfill `trial_ends_on` = created + 14 days; `app.tenant_plan_cents`, `app.tenant_billing_start`; `app.generate_invoices` v2 (first month by the day); `app.billing_tick` v2 (daily run, ended trials → active) |
+| `20261105185921_rls_shop_check_once.sql` | Speed: the 25 shop policies use `shop_id = any ((select app.shop_ids())::uuid[])` instead of the per-row `(select app.can_shop(shop_id))`; same rows visible |
 
 ## 8. How to change the database
 
