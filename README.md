@@ -428,6 +428,8 @@ Synthetic passwords and PINs will be listed here when T-003 adds the seed data. 
 | Staging | Merge to `main` | Automatic (`supabase db push`) |
 | Production | Git tag `vX.Y.Z` + approval by Tech Lead and Product Owner | Automatic in the release workflow |
 
+Server code runs in Vercel's Singapore region (`sin1`, set in `apps/web/vercel.json`), next to the Supabase database (`ap-southeast-1`). Vercel's default (`iad1`, USA) put every database call across the Pacific: pages took 2.5–4 s.
+
 Release timeline: `v1.0.0-rc.1` (D30) → `v1.1.0-rc.1` + code freeze (D40) → manual system test (D41–D45) → go/no-go, tag `v1.1.0` and production deploy (D46) → pilot go-live (D47) → hypercare (D48).
 
 Rollback: redeploy the previous Vercel deployment; database changes are forward-only and backward-compatible for one release (expand → migrate → contract). See `docs/14-operations.md`. Never load-test production.

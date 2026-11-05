@@ -12,7 +12,12 @@ export const metadata: Metadata = { title: 'Checkout' };
 export default async function LanePage({ params }: { params: Promise<{ laneId: string }> }) {
   const { laneId } = await params;
   const ctx = await requireTenant('sale.create');
-  const { data, error } = await ctx.supabase.schema('api').rpc('lane_catalog', { p_lane: laneId });
+  // Receipt settings load alongside the catalogue (one round trip, not two).
+  const [{ data, error }, { data: t }, { data: laneShop }] = await Promise.all([
+    ctx.supabase.schema('api').rpc('lane_catalog', { p_lane: laneId }),
+    ctx.supabase.from('tenants').select('receipt_paper, receipt_header, receipt_footer, receipt_print_logo, vat_registered, vat_no, lane_lock_min').eq('id', ctx.tenant.id).single(),
+    ctx.supabase.from('lanes').select('shop:shops(address, phone)').eq('id', laneId).maybeSingle(),
+  ]);
   if (error || !data) notFound();
   const catalog = data as unknown as LaneCatalog;
 
@@ -29,10 +34,7 @@ export default async function LanePage({ params }: { params: Promise<{ laneId: s
       </div>
     );
   }
-  const [{ data: t }, { data: shop }] = await Promise.all([
-    ctx.supabase.from('tenants').select('receipt_paper, receipt_header, receipt_footer, receipt_print_logo, vat_registered, vat_no, lane_lock_min').eq('id', ctx.tenant.id).single(),
-    ctx.supabase.from('shops').select('address, phone').eq('id', catalog.shop.id).single(),
-  ]);
+  const shop = laneShop?.shop;
   const receipt = t ? {
     settings: { paper: t.receipt_paper, header: t.receipt_header, footer: t.receipt_footer, logo: t.receipt_print_logo, vatNo: t.vat_registered ? t.vat_no : null, logoUrl: publicUrl(ctx.tenant.logo_path) },
     address: shop?.address ?? null,
