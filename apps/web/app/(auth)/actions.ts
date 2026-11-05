@@ -44,10 +44,12 @@ export async function signIn(_: FormState, form: FormData): Promise<FormState> {
         : 'That email and password do not match.',
     };
   }
-  await admin.schema('api').rpc('login_record', { p_email: email, p_ok: true });
-
+  // Independent of each other, so run together (each is a round trip to the database).
+  const [, { data: strict }] = await Promise.all([
+    admin.schema('api').rpc('login_record', { p_email: email, p_ok: true }),
+    supabase.from('tenants').select('strict_sessions').maybeSingle(),
+  ]);
   // "One session per person": signing in here ends this person's other sessions.
-  const { data: strict } = await supabase.from('tenants').select('strict_sessions').maybeSingle();
   if (strict?.strict_sessions) await supabase.auth.signOut({ scope: 'others' });
   // An enrolled authenticator means a code is needed before the back office opens.
   const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
